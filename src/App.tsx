@@ -11,7 +11,7 @@ import PersonForm from './components/PersonForm';
 import { demoData } from './data/demoData';
 import { Person } from './types/models';
 import { auth, database, isFirebaseAvailable, firebaseInitializationError } from './firebase';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, sendEmailVerification } from 'firebase/auth';
 import { ref, get, set, DatabaseReference } from 'firebase/database';
 // Import a way to generate unique IDs
 // Option 1: Use crypto API (modern browsers)
@@ -21,6 +21,9 @@ import { ref, get, set, DatabaseReference } from 'firebase/database';
 type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available';
 type DbDataStatus = 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
 type EditMode = 'add' | 'edit';
+
+// Base warning message text
+const UNVERIFIED_WARNING_BASE = "Your email is not verified. Please check your inbox (and spam folder) for the verification link. Some features might be limited.";
 
 function App() {
   const [treeData, setTreeData] = useState<Person[]>([]);
@@ -43,7 +46,11 @@ function App() {
 
   // --- New State for SignUp Modal ---
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState<boolean>(false);
+
+  // --- State for Verification Warning & Resend Cooldown ---
   const [verificationWarning, setVerificationWarning] = useState<string | null>(null);
+  const [resendCooldownActive, setResendCooldownActive] = useState(false);
+  const [resendStatusMessage, setResendStatusMessage] = useState<string | null>(null); // For success/error feedback
 
   // --- Data Fetching (Keep as is) ---
   const fetchTreeData = useCallback(async () => { /* ... Same fetch logic ... */
@@ -108,27 +115,57 @@ function App() {
       fetchTreeData();
     }
   }, [fetchTreeData]);
+  // --- Auth State Listener (Updates verificationWarning) ---
   useEffect(() => {
     if (firebaseStatus === 'available' && auth) {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         setCurrentUser(user);
         setAuthLoading(false);
         console.log("Auth State Changed:", user ? `Logged in as ${user.email}` : "Logged out");
-
-        // --- Check email verification ---
         if (user && !user.emailVerified) {
-          setVerificationWarning("Your email is not verified. Please check your inbox (and spam folder) for the verification link. Some features might be limited.");
+          setVerificationWarning(UNVERIFIED_WARNING_BASE); // Set the base message
+          setResendStatusMessage(null); // Clear previous resend status
         } else {
           setVerificationWarning(null); // Clear warning if verified or logged out
+          setResendStatusMessage(null);
         }
-        // --- End verification check ---
-
       });
       return () => unsubscribe();
     } else if (firebaseStatus !== 'checking') {
       setAuthLoading(false);
     }
   }, [firebaseStatus]);
+
+  // --- Handler to Resend Verification Email ---
+  const handleResendVerificationEmail = async () => {
+    if (!currentUser || resendCooldownActive || !auth || !currentUser.emailVerified === false) {
+        // Don't resend if not logged in, on cooldown, auth unavailable, or already verified
+        return;
+    }
+
+    setResendCooldownActive(true);
+    setResendStatusMessage("Sending verification email..."); // Indicate sending
+
+    try {
+      await sendEmailVerification(currentUser);
+      setResendStatusMessage("New verification email sent! Check your inbox/spam.");
+      // Keep main warning visible, just update status temporarily
+       setTimeout(() => {
+           // Clear only the status message after a few seconds
+           setResendStatusMessage(null);
+       }, 6000); // Clear status message after 6s
+    } catch (error: any) {
+      console.error("Error resending verification:", error);
+      setResendStatusMessage(`Failed to send email: ${error.message || 'Unknown error'}`);
+       setTimeout(() => {
+           // Clear error message after a few seconds
+           setResendStatusMessage(null);
+       }, 6000);
+    } finally {
+      // Set cooldown timer regardless of success/failure
+      setTimeout(() => setResendCooldownActive(false), 10000); // 10 second cooldown
+    }
+  };
 
   // --- Save Data Function (Keep as is) ---
   const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => { /* ... Same save logic ... */
@@ -344,22 +381,41 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        {/* Pass SignUp Handler to AccountIndicator */}
+        {/* Account Indicator */}
         {firebaseStatus !== 'config_error' && auth && (
             <AccountIndicator
                 currentUser={currentUser}
                 onLoginClick={handleLoginClick}
                 onLogoutClick={handleLogoutClick}
-                onSignUpClick={handleSignUpClick} // Pass the new handler
+                onSignUpClick={handleSignUpClick}
             />
         )}
 
-        <h1>Genealogia TAISCTE</h1>
+        <h1>Família TAISCTE</h1>
 
-        {/* Display Verification Warning */}
+        {/* Display Verification Warning with Resend Option */}
          {verificationWarning && !warningMessage && ( // Show only if no other major warning
-             <div className="firebase-warning warning"> {/* Add 'warning' class for styling */}
-                 <p>{verificationWarning}</p>
+             <div className="firebase-warning warning">
+                 <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}>
+                     <span>{verificationWarning}</span>
+                     {/* Add resend button conditionally */}
+                     {currentUser && !currentUser.emailVerified && (
+                         <button
+                             onClick={handleResendVerificationEmail}
+                             disabled={resendCooldownActive}
+                             style={styles.resendLinkButton} // Use button style
+                             title={resendCooldownActive ? "Please wait before resending" : "Send another verification email"}
+                         >
+                             {resendCooldownActive ? "(Wait 10s)" : "(Resend verification email)"}
+                         </button>
+                     )}
+                 </p>
+                 {/* Show sending/success/error status */}
+                 {resendStatusMessage && (
+                     <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}>
+                         {resendStatusMessage}
+                     </p>
+                 )}
              </div>
          )}
         {/* Display Other Warnings */}
@@ -368,7 +424,7 @@ function App() {
         {/* Export/Import */}
         <ExportImport {...{ onImport: handleImportData, onExport: handleExportData, isUserLoggedIn: !!currentUser, isFirebaseAvailable: firebaseStatus === 'available' }} />
 
-        {/* Tree Container */}
+        {/* Tree Container - Restrict edits if not verified */}
         <div className="tree-container">
           {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? (
              <div className="loading">Loading tree data from Firebase...</div>
@@ -378,7 +434,8 @@ function App() {
                 onAddPersonClick={handleAddPersonClick}
                 onDeletePersonClick={handleDeletePersonClick}
                 onEditPersonClick={handleEditPersonClick}
-                isUserLoggedIn={!!currentUser && (currentUser?.emailVerified ?? false)} // Only allow edits if logged in AND verified
+                // Only allow edits if logged in AND verified
+                isUserLoggedIn={!!currentUser && (currentUser?.emailVerified ?? false)}
              />
           )}
         </div>
@@ -386,23 +443,12 @@ function App() {
 
       {/* Modals */}
       {firebaseStatus !== 'config_error' && (
-          <LoginModal
-            isOpen={isLoginModalOpen}
-            onClose={handleCloseLoginModal}
-            onSwitchToSignUp={handleSwitchToSignUp} // Pass switch handler
-          />
+          <LoginModal {...{isOpen: isLoginModalOpen, onClose: handleCloseLoginModal, onSwitchToSignUp: handleSwitchToSignUp}} />
       )}
-       {/* Render SignUp Modal */}
        {firebaseStatus !== 'config_error' && (
-          <SignUpModal
-            isOpen={isSignUpModalOpen}
-            onClose={handleCloseSignUpModal}
-            onSwitchToLogin={handleSwitchToLogin} // Pass switch handler
-          />
+          <SignUpModal {...{isOpen: isSignUpModalOpen, onClose: handleCloseSignUpModal, onSwitchToLogin: handleSwitchToLogin}} />
        )}
-       {/* Person Form Modal */}
       <PersonForm {...{isOpen: isPersonFormOpen, onClose: () => setIsPersonFormOpen(false), onSubmit: handlePersonFormSubmit, initialData: personToEdit, formTitle: editMode === 'edit' ? 'Edit Person' : 'Add New Person' }} />
-      {/* Delete Confirmation Modal */}
       <Modal {...{isOpen: isDeleteConfirmOpen, onClose: () => setIsDeleteConfirmOpen(false), onConfirm: handleConfirmDelete, title: "Confirm Deletion", confirmText:"Delete", cancelText:"Cancel" }}>
           <p>Are you sure you want to delete <strong style={{color: '#dc3545'}}>{personToDelete?.name || 'this person'}</strong>?</p><p>This action is irreversible and will remove them from the tree.</p>
       </Modal>
@@ -410,5 +456,22 @@ function App() {
     </div>
   );
 }
+
+// Add styles for the resend button
+const styles: { [key: string]: React.CSSProperties } = {
+    resendLinkButton: {
+        background: 'none',
+        border: 'none',
+        color: '#0056b3', // Darker blue link color
+        textDecoration: 'underline',
+        cursor: 'pointer',
+        padding: '0 5px', // Add padding
+        fontSize: 'inherit', // Inherit font size from paragraph
+        marginLeft: '5px', // Space before the button
+    },
+    // Style for disabled state (can also be done in CSS)
+    // resendLinkButton:disabled { color: #6c757d; cursor: not-allowed; text-decoration: none; }
+};
+
 
 export default App;
