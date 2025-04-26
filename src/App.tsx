@@ -36,7 +36,7 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Family Tree</h1>
+        <h1>TAISCTE</h1>
         {isLoading ? (
           <div className="loading">Loading family tree data...</div>
         ) : (
