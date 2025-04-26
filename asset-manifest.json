@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/taiscte-tree/static/css/main.7870ac90.css",
-    "main.js": "/taiscte-tree/static/js/main.90fb7d03.js",
+    "main.js": "/taiscte-tree/static/js/main.992e19d2.js",
     "static/js/453.edc83f8b.chunk.js": "/taiscte-tree/static/js/453.edc83f8b.chunk.js",
     "index.html": "/taiscte-tree/index.html",
     "main.7870ac90.css.map": "/taiscte-tree/static/css/main.7870ac90.css.map",
-    "main.90fb7d03.js.map": "/taiscte-tree/static/js/main.90fb7d03.js.map",
+    "main.992e19d2.js.map": "/taiscte-tree/static/js/main.992e19d2.js.map",
     "453.edc83f8b.chunk.js.map": "/taiscte-tree/static/js/453.edc83f8b.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.7870ac90.css",
-    "static/js/main.90fb7d03.js"
+    "static/js/main.992e19d2.js"
   ]
 }
