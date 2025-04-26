@@ -107,11 +107,11 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
         const cardWidth    = 180;
         const cardHeight   = 160;
         const cardX        = -cardWidth / 2;
-        const cardY        = -cardHeight / 2;
+        const cardY        = -cardHeight / 2 - 3;
         const indicatorRadius = 6;
         const indicatorY      = cardY + cardHeight + 15;
         const buttonSize    = 18;
-        const buttonOffsetY = cardY + cardHeight + 5;
+        const buttonOffsetY = cardY + cardHeight + 1;
         // Buttons: edit (left), delete (center), add (right)
         const editButtonX   = cardX + (buttonSize / 2);
         const deleteButtonX = cardX + (cardWidth / 2) + (buttonSize / 2);
