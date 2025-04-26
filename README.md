@@ -1,6 +1,8 @@
 # TAISCTE_tree
 Árvore geneologica da tuna TAISCTE Lisboa!
 
+See the site here: https://yeshey.github.io/taiscte-tree/
+
 ## Get started in development:
 
 1. Install `nodejs`, or do `direnv allow` if you have nix installed.
