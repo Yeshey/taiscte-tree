@@ -5,8 +5,9 @@ import GenealogyTree from './components/GenealogyTree';
 import ExportImport, { validateAndNormalizePersonData } from './components/ExportImport';
 import AccountIndicator from './components/auth/AccountIndicator';
 import LoginModal from './components/auth/LoginModal';
-import Modal from './components/Modal'; // Import confirmation modal
-import PersonForm from './components/PersonForm'; // Import person form
+import SignUpModal from './components/auth/SignUpModal'; // Import SignUpModal
+import Modal from './components/Modal';
+import PersonForm from './components/PersonForm';
 import { demoData } from './data/demoData';
 import { Person } from './types/models';
 import { auth, database, isFirebaseAvailable, firebaseInitializationError } from './firebase';
@@ -39,6 +40,10 @@ function App() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<{ id: string, name: string } | null>(null);
   // --- End Modal State ---
+
+  // --- New State for SignUp Modal ---
+  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState<boolean>(false);
+  const [verificationWarning, setVerificationWarning] = useState<string | null>(null);
 
   // --- Data Fetching (Keep as is) ---
   const fetchTreeData = useCallback(async () => { /* ... Same fetch logic ... */
@@ -103,16 +108,25 @@ function App() {
       fetchTreeData();
     }
   }, [fetchTreeData]);
-  useEffect(() => { /* ... Same auth listener ... */
-      if (firebaseStatus === 'available' && auth) {
+  useEffect(() => {
+    if (firebaseStatus === 'available' && auth) {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         setCurrentUser(user);
         setAuthLoading(false);
         console.log("Auth State Changed:", user ? `Logged in as ${user.email}` : "Logged out");
+
+        // --- Check email verification ---
+        if (user && !user.emailVerified) {
+          setVerificationWarning("Your email is not verified. Please check your inbox (and spam folder) for the verification link. Some features might be limited.");
+        } else {
+          setVerificationWarning(null); // Clear warning if verified or logged out
+        }
+        // --- End verification check ---
+
       });
       return () => unsubscribe();
     } else if (firebaseStatus !== 'checking') {
-        setAuthLoading(false);
+      setAuthLoading(false);
     }
   }, [firebaseStatus]);
 
@@ -185,6 +199,28 @@ function App() {
     setIsLoginModalOpen(false);
   };
 
+  // --- New Sign Up Handlers ---
+  const handleSignUpClick = () => {
+    if (firebaseStatus === 'config_error') {
+        alert("Sign up unavailable: Firebase is not configured correctly.");
+        return;
+    }
+    setIsSignUpModalOpen(true);
+    setIsLoginModalOpen(false); // Close login if open
+  };
+
+  const handleCloseSignUpModal = () => { setIsSignUpModalOpen(false); };
+
+  // --- Switch between Login/Sign Up Modals ---
+  const handleSwitchToLogin = () => {
+      setIsSignUpModalOpen(false);
+      setIsLoginModalOpen(true);
+  };
+  const handleSwitchToSignUp = () => {
+      setIsLoginModalOpen(false);
+      setIsSignUpModalOpen(true);
+  };
+  // --- End Sign Up Handlers ---
 
   // --- NEW: Add/Edit/Delete Person Handlers ---
 
@@ -308,18 +344,25 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        {/* Account Indicator */}
+        {/* Pass SignUp Handler to AccountIndicator */}
         {firebaseStatus !== 'config_error' && auth && (
             <AccountIndicator
                 currentUser={currentUser}
-                onLoginClick={handleLoginClick}   // Pass handleLoginClick to the onLoginClick prop
-                onLogoutClick={handleLogoutClick}  // Pass handleLogoutClick to the onLogoutClick prop
+                onLoginClick={handleLoginClick}
+                onLogoutClick={handleLogoutClick}
+                onSignUpClick={handleSignUpClick} // Pass the new handler
             />
         )}
 
         <h1>Genealogia TAISCTE</h1>
 
-        {/* Warning Message */}
+        {/* Display Verification Warning */}
+         {verificationWarning && !warningMessage && ( // Show only if no other major warning
+             <div className="firebase-warning warning"> {/* Add 'warning' class for styling */}
+                 <p>{verificationWarning}</p>
+             </div>
+         )}
+        {/* Display Other Warnings */}
         {warningMessage && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}><p>{warningMessage}</p></div> )}
 
         {/* Export/Import */}
@@ -334,8 +377,8 @@ function App() {
                 data={treeData}
                 onAddPersonClick={handleAddPersonClick}
                 onDeletePersonClick={handleDeletePersonClick}
-                onEditPersonClick={handleEditPersonClick} // Pass edit handler
-                isUserLoggedIn={!!currentUser}
+                onEditPersonClick={handleEditPersonClick}
+                isUserLoggedIn={!!currentUser && (currentUser?.emailVerified ?? false)} // Only allow edits if logged in AND verified
              />
           )}
         </div>
@@ -343,28 +386,26 @@ function App() {
 
       {/* Modals */}
       {firebaseStatus !== 'config_error' && (
-          <LoginModal isOpen={isLoginModalOpen} onClose={handleCloseLoginModal} />
+          <LoginModal
+            isOpen={isLoginModalOpen}
+            onClose={handleCloseLoginModal}
+            onSwitchToSignUp={handleSwitchToSignUp} // Pass switch handler
+          />
       )}
-      {/* Add Person / Edit Person Form Modal */}
-      <PersonForm
-          isOpen={isPersonFormOpen}
-          onClose={() => setIsPersonFormOpen(false)}
-          onSubmit={handlePersonFormSubmit}
-          initialData={personToEdit}
-          formTitle={editMode === 'edit' ? 'Edit Person' : 'Add New Person'}
-      />
+       {/* Render SignUp Modal */}
+       {firebaseStatus !== 'config_error' && (
+          <SignUpModal
+            isOpen={isSignUpModalOpen}
+            onClose={handleCloseSignUpModal}
+            onSwitchToLogin={handleSwitchToLogin} // Pass switch handler
+          />
+       )}
+       {/* Person Form Modal */}
+      <PersonForm {...{isOpen: isPersonFormOpen, onClose: () => setIsPersonFormOpen(false), onSubmit: handlePersonFormSubmit, initialData: personToEdit, formTitle: editMode === 'edit' ? 'Edit Person' : 'Add New Person' }} />
       {/* Delete Confirmation Modal */}
-      <Modal
-          isOpen={isDeleteConfirmOpen}
-          onClose={() => setIsDeleteConfirmOpen(false)}
-          onConfirm={handleConfirmDelete}
-          title="Confirm Deletion"
-          confirmText="Delete"
-          cancelText="Cancel"
-       >
-           <p>Are you sure you want to delete <strong style={{color: '#dc3545'}}>{personToDelete?.name || 'this person'}</strong>?</p>
-           <p>This action is irreversible and will remove them from the tree.</p>
-       </Modal>
+      <Modal {...{isOpen: isDeleteConfirmOpen, onClose: () => setIsDeleteConfirmOpen(false), onConfirm: handleConfirmDelete, title: "Confirm Deletion", confirmText:"Delete", cancelText:"Cancel" }}>
+          <p>Are you sure you want to delete <strong style={{color: '#dc3545'}}>{personToDelete?.name || 'this person'}</strong>?</p><p>This action is irreversible and will remove them from the tree.</p>
+      </Modal>
 
     </div>
   );
