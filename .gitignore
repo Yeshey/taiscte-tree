@@ -564,19 +564,19 @@ gradle-app.setting
 .ionide
 
 ### Web ###
-*.asp
-*.cer
-*.csr
-*.css
-*.htm
-*.html
-*.js
-*.jsp
-*.php
-*.rss
-*.wasm
-*.wat
-*.xhtml
+# *.asp
+# *.cer
+# *.csr
+# *.css
+# *.htm
+# *.html
+# *.js
+# *.jsp
+# *.php
+# *.rss
+# *.wasm
+# *.wat
+# *.xhtml
 
 ### Windows ###
 # Windows thumbnail cache files
