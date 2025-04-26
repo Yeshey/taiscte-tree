@@ -150,9 +150,41 @@ function App() {
   const handleExportData = () => { return treeData; };
 
   // --- Login/Logout Handlers (Keep as is) ---
-  const handleLoginClick = () => { /* ... */ };
-  const handleLogoutClick = async () => { /* ... */ };
-  const handleCloseLoginModal = () => { /* ... */ };
+
+  const handleLoginClick = () => {
+    if (firebaseStatus === 'config_error') {
+       alert("Login unavailable: Firebase is not configured correctly.");
+       return;
+    }
+   setIsLoginModalOpen(true);
+  };
+
+  const handleLogoutClick = async () => {
+    // Add a log to check the auth object just before signing out
+    console.log("Attempting logout. Auth object:", auth);
+
+    if (!auth) {
+        console.error("Logout failed: Firebase auth object is null.");
+        alert("Logout failed: Authentication service unavailable.");
+        return; // Explicitly return if auth is null
+    }
+    try {
+      await signOut(auth);
+      // User state will update via the onAuthStateChanged listener
+      console.log("Sign out successful via Firebase.");
+      // Optionally clear local state that shouldn't persist after logout
+      // setTreeData(demoData); // Decide if you want to reset view on logout
+      // setWarningMessage(null); // Clear any previous warnings
+    } catch (error: any) {
+      console.error("Logout Error:", error);
+      alert(`Logout failed: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleCloseLoginModal = () => {
+    setIsLoginModalOpen(false);
+  };
+
 
   // --- NEW: Add/Edit/Delete Person Handlers ---
 
@@ -277,11 +309,13 @@ function App() {
     <div className="App">
       <header className="App-header">
         {/* Account Indicator */}
-        {firebaseStatus !== 'config_error' && auth && ( <AccountIndicator onLoginClick={function (): void {
-          throw new Error('Function not implemented.');
-        } } onLogoutClick={function (): void {
-          throw new Error('Function not implemented.');
-        } } {...{ currentUser, handleLoginClick, handleLogoutClick }} /> )}
+        {firebaseStatus !== 'config_error' && auth && (
+            <AccountIndicator
+                currentUser={currentUser}
+                onLoginClick={handleLoginClick}   // Pass handleLoginClick to the onLoginClick prop
+                onLogoutClick={handleLogoutClick}  // Pass handleLogoutClick to the onLogoutClick prop
+            />
+        )}
 
         <h1>Genealogia TAISCTE</h1>
 
