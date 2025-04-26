@@ -39,6 +39,7 @@
   margin-top: 20px;
   overflow: auto;
   background-color: white;
+  position: relative;
 }
 
 .export-import-container {
@@ -70,6 +71,7 @@
   min-width: 120px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
 .node-name {
@@ -106,4 +108,36 @@
 
 .file-input-label:hover {
   background-color: #0b7dda;
+}
+
+/* SVG Node Styles */
+.rd3t-node {
+  cursor: pointer;
+}
+
+.rd3t-label__title {
+  fill: #000;
+  stroke: none;
+  font-weight: bold;
+}
+
+/* Zoom controls */
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+}
+
+.zoom-button {
+  padding: 5px 10px;
+  margin: 2px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.zoom-button:hover {
+  background-color: #f0f0f0;
 }

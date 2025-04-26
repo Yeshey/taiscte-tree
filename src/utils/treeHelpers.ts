@@ -21,14 +21,9 @@ const findRootNodes = (people: Person[]): Person[] => {
 
 // Build tree recursively from root nodes
 const buildTree = (person: Person, allPeople: Person[]): TreeNode => {
-  // Find spouses
-  const spouses = allPeople.filter(p => 
-    person.spouses.includes(p.id)
-  );
-  
   // Find children
   const children = allPeople.filter(p => 
-    person.children.includes(p.id) || p.parents.includes(person.id)
+    p.parents.includes(person.id)
   );
   
   const treeNode: TreeNode = {
@@ -86,11 +81,12 @@ export const findPersonById = (id: string, people: Person[]): Person | undefined
 // Get all descendants of a person
 export const getDescendants = (person: Person, allPeople: Person[]): Person[] => {
   const descendants: Person[] = [];
-  const childrenIds = person.children;
   
-  const children = allPeople.filter(p => childrenIds.includes(p.id));
+  // Find direct children
+  const children = allPeople.filter(p => p.parents.includes(person.id));
   descendants.push(...children);
   
+  // Find their descendants recursively
   for (const child of children) {
     descendants.push(...getDescendants(child, allPeople));
   }
