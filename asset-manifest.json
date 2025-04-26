@@ -1,15 +1,16 @@
 {
   "files": {
-    "main.css": "/taiscte-tree/static/css/main.7870ac90.css",
-    "main.js": "/taiscte-tree/static/js/main.992e19d2.js",
+    "main.css": "/taiscte-tree/static/css/main.aa2962b2.css",
+    "main.js": "/taiscte-tree/static/js/main.2c793b82.js",
     "static/js/453.edc83f8b.chunk.js": "/taiscte-tree/static/js/453.edc83f8b.chunk.js",
+    "static/media/TAISCTE_logo.png": "/taiscte-tree/static/media/TAISCTE_logo.1ddd6a0f61ad1c86b230.png",
     "index.html": "/taiscte-tree/index.html",
-    "main.7870ac90.css.map": "/taiscte-tree/static/css/main.7870ac90.css.map",
-    "main.992e19d2.js.map": "/taiscte-tree/static/js/main.992e19d2.js.map",
+    "main.aa2962b2.css.map": "/taiscte-tree/static/css/main.aa2962b2.css.map",
+    "main.2c793b82.js.map": "/taiscte-tree/static/js/main.2c793b82.js.map",
     "453.edc83f8b.chunk.js.map": "/taiscte-tree/static/js/453.edc83f8b.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.7870ac90.css",
-    "static/js/main.992e19d2.js"
+    "static/css/main.aa2962b2.css",
+    "static/js/main.2c793b82.js"
   ]
 }
