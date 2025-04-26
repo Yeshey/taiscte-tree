@@ -115,7 +115,7 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
         // Buttons: edit (left), delete (center), add (right)
         const editButtonX   = cardX + (buttonSize / 2);
         const deleteButtonX = cardX + (cardWidth / 2) + (buttonSize / 2);
-        const addButtonX    = cardX + cardWidth - (buttonSize / 2) - 5;
+        const addButtonX    = cardX + cardWidth - (buttonSize / 2) - 10;
 
         return (
             <g onClick={toggleNode} style={{ cursor: 'pointer' }}>
@@ -158,9 +158,9 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                 {/* --- FIX 2: Icons are now available --- */}
                 {/* Add Person Button */}
                 {canAdd && (
-                    <g transform={`translate(${addButtonX}, ${buttonOffsetY})`}
+                    <g transform={`translate(${addButtonX + buttonSize/2}, ${buttonOffsetY})`}
                        onClick={(e) => { e.stopPropagation(); onAddPersonClick(nodeAttributes.id as string); }}
-                       className="node-action-button"> {/* Use class for hover */}
+                       className="node-action-button"> {/* <<< Class is already here */}
                         <PlusCircle size={buttonSize} color="#28a745"/>
                     </g>
                 )}

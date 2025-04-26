@@ -178,35 +178,16 @@
   cursor: not-allowed;
 }
 
-/* Style for action buttons on the node (better than inline) */
 .node-action-button {
   cursor: pointer;
   opacity: 0.6; /* Start slightly transparent */
   transition: opacity 0.2s ease-in-out;
+  /* --- ADD THIS LINE --- */
+  pointer-events: bounding-box; /* Makes the entire bounding box clickable */
+  /* Or use 'all' if bounding-box doesn't work for some reason */
+  /* pointer-events: all; */
 }
 
 .node-action-button:hover {
   opacity: 1; /* Fully visible on hover */
-}
-
-/* Make form modal scrollable if content overflows */
-.person-form-modal .modal-body { /* Assuming your PersonForm modal structure has a body */
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-/* Style for disabled label */
-.file-input-label.disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-.file-input-label.disabled:hover {
-  background-color: #ccc; /* Prevent hover effect when disabled */
-}
-
-/* Error style for warning box */
-.firebase-warning.error {
-    background-color: #f8d7da; /* Light red */
-    color: #721c24; /* Dark red */
-    border-color: #f5c6cb; /* Reddish border */
 }
