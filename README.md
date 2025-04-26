@@ -1,9 +1,13 @@
 # TAISCTE_tree
 Árvore geneologica da tuna TAISCTE Lisboa!
 
-# Getting Started with Create React App
+## Get started in development:
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+1. Install `nodejs`, or do `direnv allow` if you have nix installed.
+2. Run `npm install` to install all needed dependencies for the project.
+3. `npm start` to run the project locally and make changes in real time. 
+4. `npm run deploy`, deploys the site, the URL is defined in `"homepage"` of `package.json`, the site now is `https://Yeshey.github.io/taiscte-tree`  
+   - This uses the `gh-pages` package that deploys a static version of the site to the branch `gh-pages`, witch is where GitHub looks for `index.html` witch will be the static version of our site. 
 
 ## Available Scripts
 
@@ -71,3 +75,5 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+> This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
