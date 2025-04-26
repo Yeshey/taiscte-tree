@@ -1,20 +1,12 @@
 // src/components/ExportImport.tsx
 import React, { useRef } from 'react';
 import { saveAs } from 'file-saver';
-import { Person } from '../types/models'; // Import the Person type
+import { Person } from '../types/models';
 
-interface ExportImportProps {
-  onImport: (data: Person[]) => void;
-  onExport: () => Person[];
-  isUserLoggedIn: boolean;
-  isFirebaseAvailable: boolean;
-}
-
-// --- Data Validation Helper ---
-// Checks if an object looks like a valid Person structure
-// And adds default empty arrays for missing relational fields
-function validateAndNormalizePersonData(data: any): { validData: Person[] | null, errors: string[] } {
-  if (!Array.isArray(data)) {
+// --- !!! EXPORT the validation function !!! ---
+export function validateAndNormalizePersonData(data: any): { validData: Person[] | null, errors: string[] } {
+  // ... (validation function code remains exactly the same as before) ...
+    if (!Array.isArray(data)) {
     return { validData: null, errors: ["Imported data is not an array."] };
   }
 
@@ -79,9 +71,12 @@ function validateAndNormalizePersonData(data: any): { validData: Person[] | null
 
 
     // Only add if no fatal errors encountered for this item so far
-    if (!hasFatalError) {
+    if (!hasFatalError || !errors.some(e => e.includes(`index ${index}`))) { // Ensure no fatal error *for this specific item*
         // Cast to Person assumes the checks above are sufficient
         validatedPeople.push(person as Person);
+    } else {
+         // Make sure overall hasFatalError is true if any item caused one
+         hasFatalError = true;
     }
   });
 
@@ -95,23 +90,30 @@ function validateAndNormalizePersonData(data: any): { validData: Person[] | null
 // --- End Validation Helper ---
 
 
+interface ExportImportProps {
+  onImport: (data: Person[]) => void;
+  onExport: () => Person[];
+  isUserLoggedIn: boolean;
+  isFirebaseAvailable: boolean;
+}
+
+// Component remains the same, just uses the exported validation function
 const ExportImport: React.FC<ExportImportProps> = ({
     onImport,
     onExport,
     isUserLoggedIn,
     isFirebaseAvailable
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ... (rest of the component code is exactly the same as before) ...
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
-    // ... (export logic remains the same) ...
      const data = onExport();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     saveAs(blob, 'family-tree.json');
   };
 
   const handleImportClick = () => {
-     // ... (import click logic remains the same) ...
       if (!isFirebaseAvailable) {
         alert("Import disabled: Firebase connection unavailable.");
         return;
@@ -131,20 +133,14 @@ const ExportImport: React.FC<ExportImportProps> = ({
         const jsonData = JSON.parse(e.target?.result as string);
 
         // --- Validate and Normalize Data ---
-        const { validData, errors } = validateAndNormalizePersonData(jsonData);
+        const { validData, errors } = validateAndNormalizePersonData(jsonData); // Uses the exported function
 
         if (validData) {
-          // Data is valid (or normalized), proceed with import
           onImport(validData);
           if (errors.length > 0) {
-              // Inform user about non-fatal errors (like defaulted gender) if any
               alert(`Import successful with minor issues:\n- ${errors.join('\n- ')}\nCheck console for details.`);
-          } else {
-              // Optionally show success message
-              // alert("Tree data imported successfully!");
           }
         } else {
-          // Data is invalid, report errors
           alert(`Import failed due to invalid data format:\n- ${errors.join('\n- ')}\nPlease check the file structure or console for details.`);
         }
         // --- End Validation ---
@@ -161,8 +157,7 @@ const ExportImport: React.FC<ExportImportProps> = ({
     }
   };
 
-  // ... (rest of the component including button state/tooltip logic) ...
-    const importDisabled = !isFirebaseAvailable; // Disable if Firebase isn't working
+    const importDisabled = !isFirebaseAvailable;
     const importTitle = importDisabled
     ? "Import disabled: Firebase connection unavailable."
     : isUserLoggedIn
@@ -199,6 +194,5 @@ const ExportImport: React.FC<ExportImportProps> = ({
     </div>
   );
 };
-
 
 export default ExportImport;

@@ -2,14 +2,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import GenealogyTree from './components/GenealogyTree';
-import ExportImport from './components/ExportImport';
+// Import the validation function (adjust path if ExportImport is in a different folder)
+import ExportImport, { validateAndNormalizePersonData } from './components/ExportImport';
 import AccountIndicator from './components/auth/AccountIndicator';
 import LoginModal from './components/auth/LoginModal';
-import { demoData } from './data/demoData';
+import { demoData } from './data/demoData'; // Ensure this data is also valid!
 import { Person } from './types/models';
 import { auth, database, isFirebaseAvailable, firebaseInitializationError } from './firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { ref, get, set, DatabaseReference } from 'firebase/database'; // Import set
+import { ref, get, set, DatabaseReference } from 'firebase/database';
 
 type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available';
 type DbDataStatus = 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
@@ -24,13 +25,13 @@ function App() {
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
 
   // --- Fetch Data from Realtime Database ---
-  // Defined useCallback here so it can be called from the Firebase status effect
   const fetchTreeData = useCallback(async () => {
-    // Ensure database service is available (checked by isFirebaseAvailable)
     if (!database) {
         console.error("Database service unavailable during fetch attempt.");
         setWarningMessage("Error: Firebase Database service not initialized correctly.");
-        setTreeData(demoData);
+        // --- Validate demoData before setting as fallback ---
+        const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
+        setTreeData(validatedDemoData || []); // Use validated demo or empty if demo itself is broken
         setDbDataStatus('error');
         return;
     }
@@ -44,42 +45,51 @@ function App() {
       const snapshot = await get(treeDataRef);
       if (snapshot.exists()) {
         const dataFromDb = snapshot.val();
-        // Basic validation: check if it's an array
-        if (Array.isArray(dataFromDb) && dataFromDb.length > 0) {
-            console.log("Data successfully fetched from Firebase DB.");
-            setTreeData(dataFromDb);
+
+        // --- !!! VALIDATE DATA FROM FIREBASE !!! ---
+        const { validData, errors } = validateAndNormalizePersonData(dataFromDb);
+
+        if (validData) {
+            // Use the validated (and potentially normalized) data
+            console.log("Data successfully fetched and validated from Firebase DB.");
+            setTreeData(validData);
             setDbDataStatus('loaded');
-        } else if (Array.isArray(dataFromDb) && dataFromDb.length === 0) {
-             console.log("Data node exists in Firebase DB but the array is empty.");
-             setWarningMessage("Firebase connection successful. No tree members found yet. Displaying demo.");
-             setTreeData(demoData); // Show demo if DB has an empty array
-             setDbDataStatus('empty');
+            if (errors.length > 0) {
+                console.warn("Minor validation issues found in Firebase data:", errors);
+                // Optionally show a subtle warning about data cleanup?
+            }
+        } else {
+            // Validation failed for Firebase data
+            console.error("Validation failed for data fetched from Firebase:", errors);
+            setWarningMessage(`Data error in Firebase: ${errors.join(', ')}. Displaying demo data.`);
+             // --- Validate demoData before setting as fallback ---
+            const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
+            setTreeData(validatedDemoData || []);
+            setDbDataStatus('error');
         }
-         else {
-             // Data exists but is wrong format
-            console.warn("Data node exists in Firebase DB but is not an array:", dataFromDb);
-            setWarningMessage("Data format error in Firebase. Displaying demo data.");
-            setTreeData(demoData);
-            setDbDataStatus('error'); // Treat format error as an error
-        }
+        // --- End Firebase Data Validation ---
+
       } else {
         console.log("No data found at /treeData in Firebase DB.");
         setWarningMessage("Firebase connection successful, but no tree data found. Displaying demo data.");
-        setTreeData(demoData);
+         // --- Validate demoData before setting as fallback ---
+        const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
+        setTreeData(validatedDemoData || []);
         setDbDataStatus('empty');
       }
     } catch (error: any) {
       console.error("Error fetching data from Firebase DB:", error);
       if (error.code === 'PERMISSION_DENIED') {
-           // This shouldn't happen with ".read": true, but good to keep
            setWarningMessage("Error fetching data: Permission denied. Check database rules. Displaying demo data.");
       } else {
            setWarningMessage(`Error fetching data: ${error.message}. Displaying demo data.`);
       }
-      setTreeData(demoData);
+       // --- Validate demoData before setting as fallback ---
+      const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
+      setTreeData(validatedDemoData || []);
       setDbDataStatus('error');
     }
-  }, [/* No dependencies needed here, relies on external state/imports */]);
+  }, [/* No dependencies needed here */]);
 
 
   // --- Firebase Initialization and Initial Data Fetch ---
@@ -88,53 +98,59 @@ function App() {
       console.error("Firebase Init Error:", firebaseInitializationError?.message || "Config invalid");
       setFirebaseStatus('config_error');
       setWarningMessage("Firebase configuration invalid or connection failed. Showing demo data. Export/Import still available locally.");
-      setTreeData(demoData);
+       // --- Validate demoData before setting ---
+      const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
+      setTreeData(validatedDemoData || []);
       setAuthLoading(false);
       setDbDataStatus('error');
     } else {
       setFirebaseStatus('available');
-      // --- FETCH DATA HERE as soon as Firebase is available ---
-      fetchTreeData();
-      // Auth listener setup will happen in the next effect
+      fetchTreeData(); // Fetch data immediately
     }
-  }, [fetchTreeData]); // Added fetchTreeData as dependency
+  }, [fetchTreeData]); // Add fetchTreeData dependency
 
 
   // --- Auth State Listener ---
   useEffect(() => {
-    // Only run if Firebase is available and auth instance exists
     if (firebaseStatus === 'available' && auth) {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setCurrentUser(user); // Update user state
-        setAuthLoading(false); // Auth check complete
+        setCurrentUser(user);
+        setAuthLoading(false);
         console.log("Auth State Changed:", user ? `Logged in as ${user.email}` : "Logged out");
-        // --- No need to fetch data or load demo data here anymore ---
-        // Data is fetched initially, and we don't overwrite it on logout.
+        // If user logs out, we might want to keep showing the publicly fetched data,
+        // or revert to demo. Current logic keeps showing the fetched data.
+        // If you want to revert to demo on logout, add logic here.
       });
-      // Cleanup subscription on unmount
       return () => unsubscribe();
     } else if (firebaseStatus !== 'checking') {
         setAuthLoading(false);
     }
-  }, [firebaseStatus]); // Depends only on firebaseStatus
+  }, [firebaseStatus]);
 
-
-  // --- Save Data Function (Helper for Import/Future Edits) ---
-  const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => {
+   // --- Save Data Function ---
+   const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => {
     if (!database || !currentUser) {
       console.error("Cannot save data: Database unavailable or user not logged in.");
       alert("Error: Cannot save data. Please ensure you are logged in and Firebase is connected.");
-      return false; // Indicate failure
+      return false;
     }
-    // Consider adding a loading state for saving
+    // --- Optionally re-validate before saving ---
+    const { validData, errors } = validateAndNormalizePersonData(dataToSave);
+    if (!validData) {
+        console.error("Cannot save: Data failed validation.", errors);
+        alert(`Cannot save: Invalid data format detected.\n- ${errors.join('\n- ')}`);
+        return false;
+    }
+    // --- End Re-validation ---
+
     console.log("Attempting to save data to Firebase...");
     try {
       const treeDataRef = ref(database, 'treeData');
-      await set(treeDataRef, dataToSave);
+      await set(treeDataRef, validData); // Save the validated data
       console.log("Data successfully saved to Firebase.");
-      setWarningMessage("Tree data saved successfully."); // Optional success feedback
-      setTimeout(() => setWarningMessage(null), 3000); // Clear message after 3s
-      return true; // Indicate success
+      setWarningMessage("Tree data saved successfully.");
+      setTimeout(() => setWarningMessage(null), 3000);
+      return true;
     } catch (error: any) {
       console.error("Error saving data to Firebase:", error);
        if (error.code === 'PERMISSION_DENIED') {
@@ -142,33 +158,31 @@ function App() {
        } else {
            alert(`Error saving data: ${error.message}`);
        }
-      return false; // Indicate failure
+      return false;
     }
-  }, [currentUser /* Depends on currentUser to check login status */]);
+  }, [currentUser]);
+
 
   // --- Other Handlers ---
   const handleImportData = async (data: Person[]) => {
-    // Update local state immediately for responsiveness
-    setTreeData(data);
+    // The validation now happens within ExportImport, 'data' should be valid Person[]
+    setTreeData(data); // Update local state
 
-    // Attempt to save to Firebase ONLY if logged in and available
     if (firebaseStatus === 'available' && currentUser) {
       await saveTreeDataToFirebase(data);
-      // Optionally, refetch data after save to ensure consistency? Or trust local state.
-      // fetchTreeData(); // Uncomment if you want to reload from DB after save
-    } else {
-        // If not logged in, remind user data is local only
+    } else if (firebaseStatus === 'available') {
         setWarningMessage("Data imported locally. Log in to save to the shared tree.");
-        // Optionally clear warning after a delay
          setTimeout(() => {
             if (warningMessage === "Data imported locally. Log in to save to the shared tree.") {
                 setWarningMessage(null);
             }
          }, 5000);
     }
+     // If firebaseStatus is 'config_error', user already has a warning
   };
 
-  const handleExportData = () => {
+  // ... (handleExportData, handleLoginClick, handleLogoutClick, handleCloseLoginModal remain the same) ...
+    const handleExportData = () => {
     return treeData;
   };
 
@@ -194,9 +208,10 @@ function App() {
     setIsLoginModalOpen(false);
   };
 
-  // --- Render Logic ---
 
-  if (firebaseStatus === 'checking' || authLoading) {
+  // --- Render Logic ---
+  // ... (loading check remains the same) ...
+    if (firebaseStatus === 'checking' || authLoading) {
     return (
       <div className="App">
         <header className="App-header">
@@ -209,7 +224,8 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        {firebaseStatus !== 'config_error' && auth && (
+        {/* ... (AccountIndicator rendering) ... */}
+         {firebaseStatus !== 'config_error' && auth && (
             <AccountIndicator
                 currentUser={currentUser}
                 onLoginClick={handleLoginClick}
@@ -217,24 +233,25 @@ function App() {
             />
         )}
 
-        <h1>Genealogia TAISCTE</h1>
+        <h1>Família TAISCTE</h1>
 
+        {/* ... (WarningMessage rendering) ... */}
         {warningMessage && (
           <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}>
             <p>{warningMessage}</p>
           </div>
         )}
 
+
         <ExportImport
           onImport={handleImportData}
           onExport={handleExportData}
-          // Pass login status to potentially disable import button/label visually
           isUserLoggedIn={!!currentUser}
           isFirebaseAvailable={firebaseStatus === 'available'}
         />
         <div className="tree-container">
-          {/* Show loading only during initial DB fetch */}
-          {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? (
+          {/* ... (Tree/Loading rendering) ... */}
+            {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? (
              <div className="loading">Loading tree data from Firebase...</div>
           ) : (
              <GenealogyTree data={treeData} />
@@ -243,7 +260,8 @@ function App() {
 
       </header>
 
-      {firebaseStatus !== 'config_error' && (
+      {/* ... (LoginModal rendering) ... */}
+       {firebaseStatus !== 'config_error' && (
           <LoginModal
             isOpen={isLoginModalOpen}
             onClose={handleCloseLoginModal}
