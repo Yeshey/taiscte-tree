@@ -8,6 +8,18 @@
 3. `npm start` to run the project locally and make changes in real time. 
 4. `npm run deploy`, deploys the site, the URL is defined in `"homepage"` of `package.json`, the site now is `https://Yeshey.github.io/taiscte-tree`  
    - This uses the `gh-pages` package that deploys a static version of the site to the branch `gh-pages`, witch is where GitHub looks for `index.html` witch will be the static version of our site. 
+5. Create or ask for the `.env` file with the access keys to the database. The file should look like:
+   ```env
+   REACT_APP_FIREBASE_API_KEY="AIzaSyD***************N7s"
+   REACT_APP_FIREBASE_AUTH_DOMAIN="your-project-id.firebaseapp.com"
+   REACT_APP_FIREBASE_PROJECT_ID="your-project-id"
+   REACT_APP_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
+   REACT_APP_FIREBASE_MESSAGING_SENDER_ID="123456789012"
+   REACT_APP_FIREBASE_APP_ID="1:123456789012:web:abcdef123456"
+   REACT_APP_FIREBASE_MEASUREMENT_ID="G-XXXXXXXXXX"
+   REACT_APP_FIREBASE_DATABASE_URL="https://your-project-id-default-rtdb.region.firebasedatabase.app"
+   ```
+   If you want to create a new or your own firebase database to connect to this project [follow this](#creating-a-new-firebase-project-2025)
 
 ## Available Scripts
 
@@ -77,3 +89,43 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
 
 > This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+
+## Creating a New Firebase Project (2025)
+
+
+### 1. Create a Firebase Project  
+1. Go to the Firebase console at https://console.firebase.google.com and click **Add project**  ([Add Firebase to your JavaScript project | Firebase for web platforms](https://firebase.google.com/docs/web/setup?utm_source=chatgpt.com)).  
+2. Enter your project name (e.g. `my-app`), optionally enable Google Analytics, then click **Create project** and wait for Firebase to provision resources  ([Add Firebase to your JavaScript project | Firebase for web platforms](https://firebase.google.com/docs/web/setup?utm_source=chatgpt.com)).  
+
+---
+
+### 2. Register a Web App & Obtain Your Config  
+1. In your new project’s **Overview** page, click the **Web (</>)** icon to start the “Add Firebase to your web app” workflow  ([Add Firebase to your JavaScript project | Firebase for web platforms](https://firebase.google.com/docs/web/setup?utm_source=chatgpt.com)).  
+2. Give your app a nickname (internal only) and click **Register app**  ([Add Firebase to your JavaScript project | Firebase for web platforms](https://firebase.google.com/docs/web/setup?utm_source=chatgpt.com)).  
+3. Firebase will display a JavaScript snippet with your **firebaseConfig** object—copy this entire object; it looks like:  
+   ```js
+   const firebaseConfig = {
+     apiKey: "…",
+     authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+     projectId: "YOUR_PROJECT_ID",
+     storageBucket: "YOUR_PROJECT_ID.appspot.com",
+     messagingSenderId: "…",
+     appId: "…",
+     measurementId: "…" // optional
+   };
+   ```  
+   Each of those keys (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId, measurementId) is required to initialize Firebase in your app  ([Get Started with Firebase Authentication on Websites](https://firebase.google.com/docs/auth/web/start?utm_source=chatgpt.com), [Add Firebase to your JavaScript project | Firebase for web platforms](https://firebase.google.com/docs/web/setup?utm_source=chatgpt.com)).  
+
+---
+
+### 3. Enable Firebase Authentication  
+1. In the console sidebar, under **Build → Authentication**, click **Get started**  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
+2. In the **Sign-in methods** tab, enable whichever providers you need (e.g. Email/Password, Google, Facebook) and follow the prompts to configure each  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
+3. Still in **Authentication → Settings**, under **Authorized domains**, add every domain or localhost origin your app will use—otherwise OAuth redirects will be blocked  ([Add Firebase to your web service - Google Cloud](https://cloud.google.com/appengine/docs/standard/python3/building-app/adding-firebase?utm_source=chatgpt.com)).  
+
+---
+
+### 4. (Optional) Set Up Your Database  
+- **Realtime Database**: go to **Build → Realtime Database**, click **Create database**, choose your location/region, and pick a test / locked-down ruleset  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
+- **Cloud Firestore**: go to **Build → Firestore**, click **Create database**, choose “production” or “test” mode and select a region  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
+- If you use Realtime Database, note its URL (e.g. `https://YOUR_PROJECT_ID.firebaseio.com`); for Firestore the `projectId` in your config is sufficient.  

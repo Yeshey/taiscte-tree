@@ -160,3 +160,20 @@
 .zoom-button:active {
     background-color: #d0d0d0;
 }
+
+/* Account Indicator Button Hover */
+/* Target the button specifically if needed, e.g., using a class */
+.App-header [style*='z-index: 110'] button:hover { /* Example targeting via z-index */
+  background-color: #dee2e6; /* Slightly darker background */
+}
+
+/* Login Modal Submit Button Hover/Disabled */
+/* Again, better to use classes */
+[style*='z-index: 1000'] button[type="submit"]:hover:not(:disabled) {
+  background-color: #0056b3; /* Darker blue */
+}
+
+[style*='z-index: 1000'] button[type="submit"]:disabled {
+  background-color: #6c757d; /* Grey when disabled */
+  cursor: not-allowed;
+}

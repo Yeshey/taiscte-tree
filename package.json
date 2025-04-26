@@ -15,6 +15,7 @@
     "@types/react-dom": "^19.1.2",
     "dagre-d3": "^0.6.4",
     "file-saver": "^2.0.5",
+    "firebase": "^11.6.1",
     "react": "^19.1.0",
     "react-d3-tree": "^3.6.6",
     "react-dom": "^19.1.0",
