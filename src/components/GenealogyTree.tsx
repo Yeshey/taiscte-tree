@@ -115,7 +115,7 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
         // Buttons: edit (left), delete (center), add (right)
         const editButtonX   = cardX + (buttonSize / 2);
         const deleteButtonX = cardX + (cardWidth / 2) + (buttonSize / 2);
-        const addButtonX    = cardX + cardWidth - (buttonSize / 2) - 10;
+        const addButtonX    = cardX + cardWidth - (buttonSize / 2) - 15;
 
         return (
             <g onClick={toggleNode} style={{ cursor: 'pointer' }}>

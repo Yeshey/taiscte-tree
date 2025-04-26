@@ -178,16 +178,14 @@
   cursor: not-allowed;
 }
 
+/* Style for action buttons on the node */
 .node-action-button {
   cursor: pointer;
-  opacity: 0.6; /* Start slightly transparent */
+  opacity: 0.6;
   transition: opacity 0.2s ease-in-out;
-  /* --- ADD THIS LINE --- */
-  pointer-events: bounding-box; /* Makes the entire bounding box clickable */
-  /* Or use 'all' if bounding-box doesn't work for some reason */
-  /* pointer-events: all; */
+  pointer-events: all; /* Use 'all' for better cross-browser compatibility */
 }
 
 .node-action-button:hover {
-  opacity: 1; /* Fully visible on hover */
+  opacity: 1;
 }
