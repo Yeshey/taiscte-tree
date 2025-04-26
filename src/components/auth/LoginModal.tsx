@@ -1,6 +1,6 @@
 // src/components/auth/LoginModal.tsx
 import React, { useState } from 'react';
-import { auth } from '../../firebase'; // Import auth instance
+import { auth } from '../../firebase'; // auth is potentially Auth | null
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 interface LoginModalProps {
@@ -18,14 +18,34 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     event.preventDefault();
     setError(null);
     setLoading(true);
+
+    // --- Add this check ---
+    if (!auth) {
+      setError("Firebase authentication is not available. Cannot log in.");
+      setLoading(false);
+      console.error("Login attempt failed: auth instance is null.");
+      return; // Stop execution if auth is null
+    }
+    // --- End check ---
+
     try {
+      // If the check above passed, auth is guaranteed to be non-null here
       await signInWithEmailAndPassword(auth, email, password);
       onClose(); // Close modal on successful login
       setEmail('');
       setPassword('');
     } catch (err: any) {
       console.error("Login Error:", err);
-      setError(err.message || 'Failed to login. Please check your credentials.');
+      // Provide more specific common error messages if possible
+      let errorMessage = 'Failed to login. Please check your credentials.';
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else {
+         errorMessage = err.message || errorMessage; // Fallback to Firebase message
+      }
+      setError(errorMessage);
     } finally {
         setLoading(false);
     }
@@ -120,6 +140,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: 'red',
         fontSize: '13px',
         marginBottom: '10px',
+        textAlign: 'center' // Center error text
     },
     submitButton: {
         backgroundColor: '#007bff',
@@ -130,6 +151,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
         width: '100%',
         fontSize: '16px',
+        transition: 'background-color 0.2s ease', // Add transition
     }
     // submitButton:disabled defined in CSS would be better
 };
