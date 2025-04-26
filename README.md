@@ -127,7 +127,23 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 
 ---
 
-### 4. (Optional) Set Up Your Database  
+### 4. Set Up Your Database  
 - **Realtime Database**: go to **Build → Realtime Database**, click **Create database**, choose your location/region, and pick a test / locked-down ruleset  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
 - **Cloud Firestore**: go to **Build → Firestore**, click **Create database**, choose “production” or “test” mode and select a region  ([Step-by-step guide on how to set up Firebase for a web application.](https://www.linkedin.com/pulse/step-by-step-guide-how-set-up-firebase-web-maryam-fatima-rajput-aufxf?utm_source=chatgpt.com)).  
 - If you use Realtime Database, note its URL (e.g. `https://YOUR_PROJECT_ID.firebaseio.com`); for Firestore the `projectId` in your config is sufficient.  
+- Set the rules to:
+  ```
+   {
+   "rules": {
+      // Allow PUBLIC read access to the 'treeData' path
+      "treeData": {
+         ".read": true,
+         // Allow write ONLY for authenticated users
+         ".write": "auth != null"
+      },
+      // Keep other paths restricted by default
+      ".read": false, // Changed from true for better security
+      ".write": false
+      }
+   }
+  ```
