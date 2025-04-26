@@ -5,7 +5,7 @@ See the site here: https://yeshey.github.io/taiscte-tree/
 
 ## Get started in development:
 
-1. Install `nodejs`, or do `direnv allow` if you have nix installed.
+1. Install `nodejs`, or do `nix develop` if you have nix installed, or `direnv allow` if you have nix and direnv installed.
 2. Run `npm install` to install all needed dependencies for the project.
 3. `npm start` to run the project locally and make changes in real time. 
 4. `npm run deploy`, deploys the site, the URL is defined in `"homepage"` of `package.json`, the site now is `https://Yeshey.github.io/taiscte-tree`  
