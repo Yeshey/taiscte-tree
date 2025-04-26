@@ -63,35 +63,6 @@
   background-color: #45a049;
 }
 
-.node-card {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  background-color: white;
-  min-width: 120px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
-.node-name {
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.node-dates {
-  font-size: 12px;
-  color: #666;
-}
-
-.node-gender-male {
-  border-left: 4px solid #4286f4;
-}
-
-.node-gender-female {
-  border-left: 4px solid #f44271;
-}
-
 .file-input {
   display: none;
 }
@@ -140,4 +111,52 @@
 
 .zoom-button:hover {
   background-color: #f0f0f0;
+}
+
+.tree-container {
+  width: 90%;
+  height: 70vh; /* Consider using vh for viewport height */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 20px;
+  overflow: hidden; /* Changed from auto to hidden, react-d3-tree handles scrolling/panning */
+  background-color: white;
+  position: relative; /* Needed for absolute positioning of children like zoom controls */
+}
+
+/* Remove old node card styles if GenealogyNode.tsx is no longer used for rendering */
+/* .node-card { ... } */
+/* .node-name { ... } */
+/* ... etc ... */
+
+/* Zoom controls Styling */
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background */
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.zoom-button {
+  padding: 5px 10px;
+  margin: 2px;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1; /* Ensure consistent button height */
+}
+
+.zoom-button:hover {
+  background-color: #e0e0e0;
+}
+
+.zoom-button:active {
+    background-color: #d0d0d0;
 }
