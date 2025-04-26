@@ -163,7 +163,7 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({ data }) => {
         nodeSize={{ x: 200, y: 150 }}
         pathFunc="step"
         depthFactor={200}
-        initialDepth={1}
+        // initialDepth={1} // otherwise the initial tree will only show the root
         transitionDuration={300}
       />
     </div>

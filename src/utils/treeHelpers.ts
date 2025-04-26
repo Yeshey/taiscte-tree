@@ -21,31 +21,30 @@ const findRootNodes = (people: Person[]): Person[] => {
 
 // Build tree recursively from root nodes
 const buildTree = (person: Person, allPeople: Person[]): TreeNode => {
-  // Find children
-  const children = allPeople.filter(p => 
-    p.parents.includes(person.id)
-  );
+    const children = allPeople.filter(p =>
+      p.parents.length > 0 && p.parents[0] === person.id 
+    );
   
-  const treeNode: TreeNode = {
-    name: person.name,
-    attributes: {
-      id: person.id,
+    const treeNode: TreeNode = {
       name: person.name,
-      gender: person.gender,
-      birthDate: person.birthDate,
-      deathDate: person.deathDate,
-      imageUrl: person.imageUrl,
-      notes: person.notes
+      attributes: {
+        id: person.id,
+        name: person.name,
+        gender: person.gender,
+        birthDate: person.birthDate,
+        deathDate: person.deathDate,
+        imageUrl: person.imageUrl,
+        notes: person.notes
+      }
+    };
+  
+    // Add children nodes if any (recursively)
+    if (children.length > 0) {
+      treeNode.children = children.map(child => buildTree(child, allPeople));
     }
+  
+    return treeNode;
   };
-  
-  // Add children nodes if any
-  if (children.length > 0) {
-    treeNode.children = children.map(child => buildTree(child, allPeople));
-  }
-  
-  return treeNode;
-};
 
 // Transform our data structure to the format expected by react-d3-tree
 export const transformDataForTree = (people: Person[]): TreeNode => {
