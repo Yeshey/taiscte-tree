@@ -154,5 +154,5 @@ For Worflows to work in this repository, you have to go to `Settings` > `Actions
 
 This repo has two workflows:
 
-- `node-lts-version-update.yml` - Runs every yesr, 1st January, makes a PR to updates the version of node in `.nvmrc` to the latest found LTS version of nodeJS;
+- `node-lts-version-update.yml` - Runs every year, 1st January, makes a PR to updates the version of node in `.nvmrc` to the latest found LTS version of nodeJS;
 - `node-lts-version-update.yml` - Runs every year, 1st February, makes a PR to update dependencies based on node version in `.nvmrc`.
