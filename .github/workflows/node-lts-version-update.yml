@@ -1,0 +1,86 @@
+# .github/workflows/node-lts-version-update.yml
+name: Propose Node.js LTS Update in .nvmrc
+
+on:
+  schedule:
+    # Runs on the 1st of January at 06:00 UTC
+    - cron: '0 6 1 1 *' # Changed from monthly to yearly (January 1st)
+  workflow_dispatch: # Allows manual triggering
+
+# Permissions needed for the create-pull-request action
+permissions:
+  contents: write         # To commit the .nvmrc change and push the branch
+  pull-requests: write    # To create the pull request
+
+jobs:
+  propose-nvmrc-update:
+    runs-on: ubuntu-latest
+    outputs:
+      latest_lts_major: ${{ steps.get_versions.outputs.latest_lts_major }}
+      needs_update: ${{ steps.get_versions.outputs.needs_update }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Get Latest LTS and Current .nvmrc Version
+        id: get_versions
+        run: |
+          echo "Fetching latest Node.js LTS version..."
+          LATEST_LTS_VERSION=$(curl -s https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts != false)] | sort_by(.date) | reverse | .[0].version')
+          LATEST_LTS_MAJOR=$(echo $LATEST_LTS_VERSION | sed 's/v\([0-9]*\).*/\1/')
+          echo "Latest LTS Major: ${LATEST_LTS_MAJOR}"
+
+          echo "Reading current version from .nvmrc..."
+          if [[ ! -f ".nvmrc" ]]; then echo "Error: .nvmrc file not found."; exit 1; fi
+          CURRENT_RAW_VERSION=$(cat .nvmrc | xargs)
+          CURRENT_MAJOR=$(echo $CURRENT_RAW_VERSION | sed 's/^v\?//')
+          echo "Current Configured Major in .nvmrc: ${CURRENT_MAJOR}"
+
+          if ! [[ "$LATEST_LTS_MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$CURRENT_MAJOR" =~ ^[0-9]+$ ]]; then echo "Error: Could not parse valid major version numbers."; exit 1; fi
+
+          echo "latest_lts_major=${LATEST_LTS_MAJOR}" >> $GITHUB_OUTPUT
+          echo "current_major=${CURRENT_MAJOR}" >> $GITHUB_OUTPUT
+
+          if [[ "$LATEST_LTS_MAJOR" -gt "$CURRENT_MAJOR" ]]; then
+            echo "Update needed."
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Node.js major version update needed for .nvmrc."
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Update .nvmrc File Locally
+        if: steps.get_versions.outputs.needs_update == 'true'
+        run: |
+          LATEST_LTS_MAJOR="${{ steps.get_versions.outputs.latest_lts_major }}"
+          echo "Updating .nvmrc content to ${LATEST_LTS_MAJOR}"
+          echo "${LATEST_LTS_MAJOR}" > .nvmrc
+          echo ".nvmrc content updated:"
+          cat .nvmrc
+        shell: bash
+
+      - name: Create Pull Request for .nvmrc Update
+        if: steps.get_versions.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(node): update .nvmrc to Node.js LTS v${{ steps.get_versions.outputs.latest_lts_major }}"
+          committer: GitHub Actions Bot <actions@github.com>
+          author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+          signoff: false
+          branch: chore/update-nvmrc-node-v${{ steps.get_versions.outputs.latest_lts_major }}
+          delete-branch: true
+          title: "chore(node): Update .nvmrc to Node.js LTS v${{ steps.get_versions.outputs.latest_lts_major }}"
+          body: |
+            The latest Node.js LTS version is **v${{ steps.get_versions.outputs.latest_lts_major }}**.
+
+            This PR updates the `.nvmrc` file accordingly.
+
+            **Manual Action Required Before Merging:**
+            1.  Review this change to `.nvmrc`.
+            2.  **Manually update `flake.nix`** (if used, e.g., `pkgs.nodejs_XX`) to use Node.js **v${{ steps.get_versions.outputs.latest_lts_major }}**.
+            3.  Update other project files (`package.json engines`, workflow Node versions, etc.) if needed.
+            4.  Run `npm install` or `npm ci` locally with the new Node version active.
+            5.  Test the application thoroughly (`npm run build`, `npm test`, manual testing).
+            6.  Merge this PR **after** updating any necessary files and testing successfully.

@@ -1,0 +1,95 @@
+# .github/workflows/dependency-update-pr.yml
+name: Propose Yearly Dependency Update
+
+on:
+  schedule:
+    # Runs on the 1st of February at 05:00 UTC (one month after LTS check)
+    - cron: '0 5 1 2 *' # Changed from weekly to yearly (February 1st)
+  workflow_dispatch: # Allows manual triggering
+
+# Permissions needed for the create-pull-request action
+permissions:
+  contents: write         # To commit updated package files and push the branch
+  pull-requests: write    # To create the pull request
+
+jobs:
+  propose-dependency-update:
+    name: Update Dependencies & Propose PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Read .nvmrc
+        id: node_version
+        run: echo "NODE_VERSION=$(cat .nvmrc | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node_version.outputs.NODE_VERSION }}
+          cache: 'npm' # Use npm cache
+
+      - name: Install Dependencies (Clean Install)
+        run: npm ci # Use clean install for consistency
+
+      - name: Check for Outdated Dependencies (Informational)
+        # Run before update to see what *will* be updated
+        run: npm outdated || true
+
+      - name: Update Dependencies
+        # This command updates dependencies based on package.json constraints
+        run: npm update
+
+      - name: Check for Package File Changes
+        # Check if npm update actually changed package.json or package-lock.json
+        id: check_changes
+        run: |
+          if git status --porcelain package-lock.json package.json | grep -qE '^\s?[AM]'; then
+            echo "changes_detected=true" >> $GITHUB_OUTPUT
+            echo "Detected changes in package files after npm update."
+          else
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+            echo "No dependency changes detected after npm update."
+          fi
+
+      - name: Get Current Date for Branch Name
+        if: steps.check_changes.outputs.changes_detected == 'true'
+        id: get_date
+        run: echo "date=$(date +'%Y-%m')" >> $GITHUB_OUTPUT
+
+      # --- REMOVED: Build, Test, Commit, Push, Deploy steps ---
+
+      # --- ADDED: Create Pull Request Step ---
+      - name: Create Pull Request for Dependency Updates
+        if: steps.check_changes.outputs.changes_detected == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Commit message reflects the change being made
+          commit-message: "chore(deps): propose automated npm dependency updates"
+          committer: GitHub Actions Bot <actions@github.com>
+          author: GitHub Actions Bot <actions@github.com> # Or keep original author if preferred
+          signoff: false
+          # Branch name includes date to be unique yearly
+          branch: chore/update-npm-deps-${{ steps.get_date.outputs.date }}
+          delete-branch: true # Delete branch after PR merge/close
+          # Title for the Pull Request
+          title: "chore(deps): Propose npm dependency updates (${{ steps.get_date.outputs.date }})"
+          # Body explains the change and required manual steps
+          body: |
+            This PR contains automated updates to npm dependencies based on the version constraints in `package.json`.
+
+            **Action Required Before Merging:**
+            1.  **Review the changes** in `package.json` and `package-lock.json`. Pay attention to major version bumps, which might introduce breaking changes.
+            2.  Check the [npm outdated](https://docs.npmjs.com/cli/v10/commands/npm-outdated) command output in the workflow logs for details on what was updated.
+            3.  Pull this branch locally (`git fetch origin chore/update-npm-deps-${{ steps.get_date.outputs.date }} && git checkout chore/update-npm-deps-${{ steps.get_date.outputs.date }}`).
+            4.  Run `npm install` or `npm ci` locally.
+            5.  **Test the application thoroughly** (`npm run build`, `npm test` if configured, and manual testing) to ensure the updates haven't broken anything.
+            6.  Address any issues found during testing. You may need to manually adjust versions in `package.json` if an update causes problems.
+            7.  Merge this PR **after** successful testing.
+
+      - name: No Dependency Changes Detected
+        if: steps.check_changes.outputs.changes_detected == 'false'
+        run: echo "No dependency updates found. Skipping Pull Request creation."
