@@ -79,8 +79,8 @@ jobs:
 
             **Manual Action Required Before Merging:**
             1.  Review this change to `.nvmrc`.
-            2.  **Manually update `flake.nix`** (if used, e.g., `pkgs.nodejs_XX`) to use Node.js **v${{ steps.get_versions.outputs.latest_lts_major }}**.
+            2.  **Manually update `flake.nix`** (if used, e.g., `pkgs.nodejs_XX`) to use Node.js **v${{ steps.get_versions.outputs.latest_lts_major }}**. (optional if you don't use nix)
             3.  Update other project files (`package.json engines`, workflow Node versions, etc.) if needed.
             4.  Run `npm install` or `npm ci` locally with the new Node version active.
-            5.  Test the application thoroughly (`npm run build`, `npm test`, manual testing).
+            5.  Test the application thoroughly (`npm run build`, `npm start`, `npm test`, manual testing).
             6.  Merge this PR **after** updating any necessary files and testing successfully.
