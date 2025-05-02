@@ -107,20 +107,6 @@ const SignUpModal: React.FC<SignUpModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Show message if invite is invalid and modal was somehow opened
-  if (inviteStatus !== 'valid') {
-     return (
-         <div style={styles.overlay}>
-             <div style={styles.modal}>
-                  <button onClick={onClose} style={styles.closeButton}>×</button>
-                  <h2>Create Account</h2>
-                  <p style={styles.errorText}>{error || AppStrings.SIGNUP_INVALID_INVITE}</p>
-                   <p style={styles.switchText}> Have an account?{' '} <button onClick={onSwitchToLogin} style={styles.switchButton}> Log In </button> </p>
-             </div>
-         </div>
-     );
-  }
-
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
