@@ -1,10 +1,10 @@
 // src/components/PersonForm.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Person } from '../types/models';
 import * as AppStrings from '../constants/strings';
+import PersonFormFields from './form/PersonFormFields'; // Import the new fields component
 
-// ... (interface PersonFormProps remains the same)
+// Interface remains the same
 interface PersonFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -18,14 +18,13 @@ interface PersonFormProps {
   isEditMode: boolean;
 }
 
-
 const PersonForm: React.FC<PersonFormProps> = ({
     isOpen, onClose, onSubmit, initialData, formTitle,
     familyNameOptions,
     naipeOptions, instrumentOptions, hierarchyOptions,
     isEditMode
 }) => {
-    // --- State for all fields (remains the same) ---
+    // --- State remains here ---
     const [name, setName] = useState('');
     const [familyName, setFamilyName] = useState('');
     const [nickname, setNickname] = useState('');
@@ -38,15 +37,13 @@ const PersonForm: React.FC<PersonFormProps> = ({
     const [naipeVocal, setNaipeVocal] = useState('');
     const [mainInstrument, setMainInstrument] = useState('');
     const [selectedOtherInstruments, setSelectedOtherInstruments] = useState<Set<string>>(new Set());
-    const [subidaPalcoDate, setSubidaPalcoDate] = useState('');
-    const [passagemTunoDate, setPassagemTunoDate] = useState('');
-    const [dataSaidaDaTuna, setDataSaidaDaTuna] = useState('');
+    const [subidaPalcoDate, setSubidaPalcoDate] = useState(''); // State for date
+    const [passagemTunoDate, setPassagemTunoDate] = useState(''); // State for date
+    const [dataSaidaDaTuna, setDataSaidaDaTuna] = useState(''); // State for date
     const [hierarquia, setHierarquia] = useState('');
-    // Store the value *before* opening the prompt
     const [previousSelectValue, setPreviousSelectValue] = useState<string>('');
 
-
-    // --- Populate form on open/initialData change (remains the same) ---
+    // --- Effect remains here ---
      useEffect(() => {
         if (isOpen) {
             const data = initialData;
@@ -69,61 +66,38 @@ const PersonForm: React.FC<PersonFormProps> = ({
         }
      }, [initialData, isOpen]);
 
-    // --- UPDATED Handlers for dynamic dropdowns ---
+    // --- Handlers remain here ---
+    // handleDropdownChange, handleOtherInstrumentChange, handleSubmit ...
     const handleDropdownChange = (
         e: React.ChangeEvent<HTMLSelectElement>,
         setter: React.Dispatch<React.SetStateAction<string>>,
-        currentStateValue: string, // Pass the current state value
+        currentStateValue: string,
         promptMessage: string
     ) => {
         const value = e.target.value;
-
         if (value === AppStrings.ADD_NEW_OPTION_VALUE) {
-            // Store the value *before* the prompt, in case of cancellation
-            setPreviousSelectValue(currentStateValue); // Use the passed current state
-
+            setPreviousSelectValue(currentStateValue);
             const newValue = window.prompt(promptMessage);
-
             if (newValue && newValue.trim()) {
                 const trimmedValue = newValue.trim();
-                console.log(`Prompt returned: ${trimmedValue}. Setting state.`); // Debug log
                 setter(trimmedValue);
-                // *** Do NOT try to set e.target.value directly here ***
-                // Let React handle the update via the state and 'value' prop binding.
             } else {
-                // User cancelled or entered empty string
-                console.log("Prompt cancelled or empty. Reverting selection visually."); // Debug log
-                // Visually reset the dropdown to the value it had *before* "Add New..." was clicked.
-                // This requires the state update from `setter` to eventually match this value
-                // on the next render if the user *does* select the previous value again.
-                // The most reliable way is to just let the state stay as `previousSelectValue`
-                // if the setter wasn't called with a new value.
-                // We only need to force the *visual* aspect of the select element back.
-                e.target.value = previousSelectValue; // Attempt to reset visual selection
-                // No state change is needed here if setter wasn't called.
+                e.target.value = previousSelectValue;
             }
         } else {
-            console.log(`Standard selection: ${value}. Setting state.`); // Debug log
-            setter(value); // Handle standard selection
+            setter(value);
         }
     };
 
-
-    // --- Handler for Other Instruments Checkboxes (remains the same) ---
     const handleOtherInstrumentChange = (instrument: string, checked: boolean) => {
         setSelectedOtherInstruments(prev => {
             const newSet = new Set(prev);
-            if (checked) {
-                newSet.add(instrument);
-            } else {
-                newSet.delete(instrument);
-            }
+            if (checked) newSet.add(instrument);
+            else newSet.delete(instrument);
             return newSet;
         });
     };
 
-
-    // --- Form Submission (remains the same) ---
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
         if (!name || !gender || !familyName) {
@@ -131,12 +105,9 @@ const PersonForm: React.FC<PersonFormProps> = ({
             return;
         }
         const formatInputDate = (dateStr: string): string | undefined => dateStr || undefined;
-
         onSubmit({
             ...(isEditMode && initialData?.id && { id: initialData.id }),
-            name,
-            familyName,
-            gender,
+            name, familyName, gender,
             ...(nickname && { nickname }),
             birthDate: formatInputDate(birthDate),
             deathDate: formatInputDate(deathDate),
@@ -164,132 +135,49 @@ const PersonForm: React.FC<PersonFormProps> = ({
             <div style={styles.modal}>
                 <button onClick={onClose} style={styles.closeButton}>×</button>
                 <h2>{formTitle}</h2>
-                <form onSubmit={handleSubmit} style={styles.form}>
-                    {/* --- Fields --- */}
-                    <div style={styles.inputGroup}> <label htmlFor="name">Name*:</label> <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} required style={styles.input} /> </div>
-                    {/* Family Name Dropdown - PASS CURRENT STATE */}
-                    <div style={styles.inputGroup}> <label htmlFor="familyName">Family Name*:</label>
-                        <select id="familyName" value={familyName} onChange={(e) => handleDropdownChange(e, setFamilyName, familyName, AppStrings.PROMPT_ADD_NEW_FAMILY_NAME)} required style={styles.input}>
-                            <option value="">-- Select --</option>
-                            {familyNameOptions.map(n => <option key={n} value={n}>{n}</option>)}
-                            {/* Conditionally render the new value as an option if it's not already in the list */}
-                            {familyName && !familyNameOptions.includes(familyName) && familyName !== AppStrings.ADD_NEW_OPTION_VALUE && (
-                                 <option key={familyName} value={familyName}>{familyName}</option>
-                             )}
-                            <option value={AppStrings.ADD_NEW_OPTION_VALUE}>{AppStrings.ADD_NEW_OPTION_TEXT}</option>
-                        </select>
-                    </div>
-                    <div style={styles.inputGroup}> <label htmlFor="nickname">Nickname:</label> <input type="text" id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} style={styles.input} /> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="gender">Gender*:</label> <select id="gender" value={gender} onChange={(e) => setGender(e.target.value as any)} required style={styles.input}> <option value="other">Other</option> <option value="male">Male</option> <option value="female">Female</option> </select> </div>
-                    {/* Hierarquia Dropdown - PASS CURRENT STATE */}
-                    <div style={styles.inputGroup}>
-                        <label htmlFor="hierarquia">Hierarquia:</label>
-                        <select id="hierarquia" value={hierarquia} onChange={(e) => handleDropdownChange(e, setHierarquia, hierarquia, AppStrings.PROMPT_ADD_NEW_HIERARCHY)} style={styles.input}>
-                            <option value="">-- Select --</option>
-                            {hierarchyOptions.map(h => <option key={h} value={h}>{h}</option>)}
-                            {hierarquia && !hierarchyOptions.includes(hierarquia) && hierarquia !== AppStrings.ADD_NEW_OPTION_VALUE && (
-                                <option key={hierarquia} value={hierarquia}>{hierarquia}</option>
-                            )}
-                            <option value={AppStrings.ADD_NEW_OPTION_VALUE}>{AppStrings.ADD_NEW_OPTION_TEXT}</option>
-                        </select>
-                    </div>
-                    <div style={styles.inputGroup}>
-                        <label htmlFor="curso">Curso:</label>
-                        <input type="text" id="curso" value={curso} onChange={(e) => setCurso(e.target.value)} style={styles.input} />
-                    </div>
-                     {/* Naipe Vocal Dropdown - PASS CURRENT STATE */}
-                    <div style={styles.inputGroup}>
-                        <label htmlFor="naipeVocal">Naipe Vocal:</label>
-                        <select id="naipeVocal" value={naipeVocal} onChange={(e) => handleDropdownChange(e, setNaipeVocal, naipeVocal, AppStrings.PROMPT_ADD_NEW_NAIPE)} style={styles.input}>
-                            <option value="">-- Select --</option>
-                            {naipeOptions.map(n => <option key={n} value={n}>{n}</option>)}
-                             {naipeVocal && !naipeOptions.includes(naipeVocal) && naipeVocal !== AppStrings.ADD_NEW_OPTION_VALUE && (
-                                <option key={naipeVocal} value={naipeVocal}>{naipeVocal}</option>
-                            )}
-                            <option value={AppStrings.ADD_NEW_OPTION_VALUE}>{AppStrings.ADD_NEW_OPTION_TEXT}</option>
-                        </select>
-                        <small>{AppStrings.REMOVE_OPTION_INFO}</small>
-                    </div>
-                    {/* Main Instrument Dropdown - PASS CURRENT STATE */}
-                    <div style={styles.inputGroup}>
-                        <label htmlFor="mainInstrument">Main Instrument:</label>
-                        <select id="mainInstrument" value={mainInstrument} onChange={(e) => handleDropdownChange(e, setMainInstrument, mainInstrument, AppStrings.PROMPT_ADD_NEW_INSTRUMENT)} style={styles.input}>
-                            <option value="">-- Select --</option>
-                            {instrumentOptions.map(i => <option key={i} value={i}>{i}</option>)}
-                             {mainInstrument && !instrumentOptions.includes(mainInstrument) && mainInstrument !== AppStrings.ADD_NEW_OPTION_VALUE && (
-                                <option key={mainInstrument} value={mainInstrument}>{mainInstrument}</option>
-                            )}
-                            <option value={AppStrings.ADD_NEW_OPTION_VALUE}>{AppStrings.ADD_NEW_OPTION_TEXT}</option>
-                        </select>
-                        <small>{AppStrings.REMOVE_OPTION_INFO}</small>
-                    </div>
-                    {/* Other Instruments Checkboxes (remains the same) */}
-                     {instrumentOptions.length > 0 && (
-                        <div style={styles.inputGroup}>
-                            <label>Other Instruments:</label>
-                            <div style={styles.checkboxGroup}>
-                                {otherInstrumentCheckboxOptions.map(inst => (
-                                    <div key={inst} style={styles.checkboxItem}>
-                                        <input
-                                            type="checkbox"
-                                            id={`otherInst-${inst}`}
-                                            value={inst}
-                                            checked={selectedOtherInstruments.has(inst)}
-                                            onChange={(e) => handleOtherInstrumentChange(inst, e.target.checked)}
-                                            style={{ marginRight: '5px' }} // Add style for checkbox margin
-                                        />
-                                        <label htmlFor={`otherInst-${inst}`} style={styles.checkboxItemLabel}>{inst}</label> {/* Apply label style */}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                     )}
-
-                    {/* --- Dates (remains the same) --- */}
-                    <div style={styles.inputGroup}> <label htmlFor="subidaPalco">Subida a Palco Date:</label> <input type="date" id="subidaPalco" value={subidaPalcoDate} onChange={(e) => setSubidaPalcoDate(e.target.value)} style={styles.input}/> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="passagemTuno">Passagem a Tuno Date:</label> <input type="date" id="passagemTuno" value={passagemTunoDate} onChange={(e) => setPassagemTunoDate(e.target.value)} style={styles.input}/> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="dataSaida">Data Saída da Tuna:</label> <input type="date" id="dataSaida" value={dataSaidaDaTuna} onChange={(e) => setDataSaidaDaTuna(e.target.value)} style={styles.input} /> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="birthDate">Birth Date:</label> <input type="date" id="birthDate" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={styles.input} /> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="deathDate">Death Date:</label> <input type="date" id="deathDate" value={deathDate} onChange={(e) => setDeathDate(e.target.value)} style={styles.input} /> </div>
-
-                    {/* --- Other (remains the same) --- */}
-                    <div style={styles.inputGroup}> <label htmlFor="imageUrl">Image URL (Imgur / https):</label> <input type="url" id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} style={styles.input} placeholder="https://i.imgur.com/... or https://..."/> </div>
-                    <div style={styles.inputGroup}> <label htmlFor="notes">Notes:</label> <textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...styles.input, height: '60px' }} /> </div>
-
-                    <button type="submit" style={styles.submitButton}>Save Person</button>
-                </form>
+                {/* Render the Fields Component, passing all state and handlers */}
+                <PersonFormFields
+                    // Values
+                    name={name} familyName={familyName} nickname={nickname} gender={gender} birthDate={birthDate}
+                    deathDate={deathDate} imageUrl={imageUrl} notes={notes} curso={curso} naipeVocal={naipeVocal}
+                    mainInstrument={mainInstrument} selectedOtherInstruments={selectedOtherInstruments}
+                    subidaPalcoDate={subidaPalcoDate} passagemTunoDate={passagemTunoDate}
+                    dataSaidaDaTuna={dataSaidaDaTuna} hierarquia={hierarquia}
+                    // Options
+                    familyNameOptions={familyNameOptions} naipeOptions={naipeOptions}
+                    instrumentOptions={instrumentOptions} hierarchyOptions={hierarchyOptions}
+                    otherInstrumentCheckboxOptions={otherInstrumentCheckboxOptions}
+                    // Basic Setters
+                    setName={setName} setNickname={setNickname} setGender={setGender} setBirthDate={setBirthDate}
+                    setDeathDate={setDeathDate} setImageUrl={setImageUrl} setNotes={setNotes} setCurso={setCurso}
+                    // --- PASS MISSING DATE SETTERS ---
+                    setSubidaPalcoDate={setSubidaPalcoDate}
+                    setPassagemTunoDate={setPassagemTunoDate}
+                    setDataSaidaDaTuna={setDataSaidaDaTuna}
+                    // --- END PASS ---
+                    // Handlers
+                    handleDropdownChange={handleDropdownChange}
+                    handleOtherInstrumentChange={handleOtherInstrumentChange}
+                    handleSubmit={handleSubmit}
+                    // Dropdown Setters for handler
+                    setFamilyNameState={setFamilyName}
+                    setNaipeVocalState={setNaipeVocal}
+                    setMainInstrumentState={setMainInstrument}
+                    setHierarquiaState={setHierarquia}
+                />
             </div>
         </div>
     );
 };
 
-// --- Styles (updated slightly for checkbox labels) ---
+// Styles remain the same
+// --- Styles (Keep only overlay/modal container styles) ---
 const styles: { [key: string]: React.CSSProperties } = {
     overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '20px' },
     modal: { backgroundColor: 'white', padding: '25px 35px', borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.2)', position: 'relative', width: '90%', maxWidth: '600px', margin: 'auto' },
-    form: { maxHeight: '75vh', overflowY: 'auto', paddingRight: '15px', }, // Add scroll for long forms
     closeButton: { position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#aaa', },
-    inputGroup: { marginBottom: '15px', textAlign: 'left', },
-    label: {
-        display: 'block',
-        marginBottom: '3px',
-        fontWeight: 'bold',
-        fontSize: '14px',
-    },
-    input: { display: 'block', width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', fontSize: '14px', },
-    submitButton: { backgroundColor: '#28a745', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '100%', fontSize: '16px', marginTop: '10px', },
-    checkboxGroup: {
-        border: '1px solid #ccc', borderRadius: '4px', padding: '10px', marginTop: '5px', maxHeight: '150px', overflowY: 'auto'
-    },
-    checkboxItem: {
-        display: 'flex', alignItems: 'center', marginBottom: '5px',
-    },
-    checkboxItemLabel: { // Style for the label next to the checkbox
-        marginLeft: '8px',
-        fontWeight: 'normal', // Normal weight
-        fontSize: '14px',     // Match input font size
-        cursor: 'pointer',    // Indicate it's clickable
-    }
+    // Form styles are now in PersonFormFields.tsx
 };
+
 
 export default PersonForm;
