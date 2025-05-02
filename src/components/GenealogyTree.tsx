@@ -127,8 +127,8 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
 
     const cardWidth = 200;
     const cardHeight = 185;
-    const bottomButtonSpacing = 30; // How much space buttons need
-    const noButtonSpacing = 5;      // Minimal space below card if no buttons
+    const bottomButtonSpacing = 35; // How much space buttons need
+    const noButtonSpacing = 20;      // Minimal space below card if no buttons
     const bottomSpacing = isUserLoggedIn ? bottomButtonSpacing : noButtonSpacing;
     const totalNodeHeight = cardHeight + bottomSpacing;
 
@@ -175,15 +175,35 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
         const saidaDate = formatDate(personData?.dataSaidaDaTuna, 'month'); // Display YYYY-MM as MM/YYYY
         const otherInstrumentsText = personData?.otherInstruments?.join(', ');
 
-        // --- Positioning ---
-        const cardX = -cardWidth / 2;
-        const cardY = -cardHeight / 2;
+        // --- Positioning Constants ---
+        const cardWidth = 200; const cardHeight = 180;
+        const cardX = -cardWidth / 2; const cardY = -cardHeight / 2;
+        // Buttons below card
         const buttonSize = 16;
-        const buttonOffsetY = cardY + cardHeight + 8;
-        const buttonSpacing = 10;
-        const editButtonX = -buttonSize / 2 - buttonSpacing;
-        const deleteButtonX = 0;
-        const addButtonX = buttonSize / 2 + buttonSpacing;
+        const buttonOffsetY = cardY + cardHeight + 1; // Y position remains the same
+        const buttonSpacing = 8; // Space between adjacent buttons
+        // --- Calculate X positions for visible buttons ---
+        const visibleButtons: ('edit' | 'delete' | 'add')[] = [];
+        if (canEdit && personData) visibleButtons.push('edit');
+        if (canDelete) visibleButtons.push('delete');
+        if (canAdd) visibleButtons.push('add');
+        const visibleButtonCount = visibleButtons.length;
+        const totalButtonsWidth = (visibleButtonCount * buttonSize) + (Math.max(0, visibleButtonCount - 1) * buttonSpacing);
+        const startX = -totalButtonsWidth / 2; // Starting X for the group to be centered
+        let currentButtonX = startX; // Track current X position for placement
+        // Helper to calculate position for a specific button type if visible
+        const getButtonPosition = (type: 'edit' | 'delete' | 'add'): number | null => {
+            const index = visibleButtons.indexOf(type);
+            if (index === -1) return null; // Button is not visible
+
+            // Calculate position based on index within the visible group
+            const posX = startX + (index * (buttonSize + buttonSpacing));
+            return posX;
+        };
+        const editButtonX = getButtonPosition('edit');
+        const deleteButtonX = getButtonPosition('delete');
+        const addButtonX = getButtonPosition('add');
+        // --- End Button Position Calculation ---
 
         // --- Node Click Handler ---
         const handleNodeCardClick = (event: React.MouseEvent) => {
@@ -200,7 +220,13 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                 <foreignObject width={cardWidth} height={cardHeight} x={cardX} y={cardY}>
                     <div style={styles.nodeCard}>
                     <img src={imageUrl} alt={nodeName} style={isArtificialRoot ? styles.rootImage : styles.personImage} onError={(e) => { const t=e.target as HTMLImageElement; if(t.src!==placeholderImageUrl) t.src=placeholderImageUrl; }}/>
-                    <div style={styles.nodeName} title={displayName}>{displayName}</div>
+                    <div style={styles.nodeName} title={displayName}>{
+                        !isArtificialRoot && (
+                            <div style={styles.nodeName} title={displayName}>
+                                {displayName}
+                            </div>
+                        )
+                    }</div>
                         {!isArtificialRoot && personData && (
                             <>
                                 <div style={styles.nodeDetails}>{personData.hierarquia || '-'}</div>
