@@ -239,14 +239,18 @@ export function useAuth(firebaseStatus: FirebaseStatus) {
         const newTokenId = crypto.randomUUID();
         // 'database' is guaranteed non-null here
         const newInviteRef = ref(database, `invites/${newTokenId}`);
-        const inviteData: InviteToken = {
-            id: newTokenId,
+
+        // --- CORRECTED DATA ---
+        // Remove the 'id' field from the object being written
+        const inviteDataToWrite = {
             status: 'unused',
             creatorUid: currentUser.uid,
         };
+        // --- END CORRECTION ---
 
         try {
-            await set(newInviteRef, inviteData);
+            // Write the corrected data object
+            await set(newInviteRef, inviteDataToWrite);
             console.log(`Invite token ${newTokenId} created by ${currentUser.email}`);
             const inviteUrl = `${window.location.origin}${window.location.pathname}?invite=${newTokenId}`;
             return inviteUrl;
