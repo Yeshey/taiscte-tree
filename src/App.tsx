@@ -1,58 +1,46 @@
 // src/App.tsx
-import React, { useState, useCallback, useMemo, useEffect } from 'react'; // Added useEffect back temporarily if needed
+import React, { useState, useCallback, useMemo } from 'react'; // Removed useEffect as it's in hooks now
 import './App.css';
 import AppLayout from './components/AppLayout';
 import { Person } from './types/models';
 import { useAuth } from './hooks/useAuth';
 import { useTreeData } from './hooks/useTreeData';
 import { useDropdownOptions } from './hooks/useDropdownOptions';
-// Import the flags needed to determine status
-import { auth, database, isFirebaseAvailable, firebaseInitializationError } from './firebase';
-import * as AppStrings from './constants/strings';
+import { isFirebaseAvailable, firebaseInitializationError } from './firebase'; // Keep these
 
-// Type alias for clarity, can be imported if defined centrally
 type EditMode = 'add' | 'edit';
-// Define FirebaseStatus type here or import if defined centrally
-type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available';
+type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available'; // Define locally or import
 
 function App() {
     // --- Determine Initial Firebase Status ---
-    // This runs once when the component mounts, based on the synchronous init in firebase.ts
     const initialFirebaseStatus: FirebaseStatus = useMemo(() => {
-        if (!isFirebaseAvailable && firebaseInitializationError) {
-            return 'config_error';
-        } else if (isFirebaseAvailable) {
-            return 'available';
-        } else {
-            // This case shouldn't ideally happen if firebase.ts logic is correct
-            console.warn("Could not determine initial Firebase status definitively.");
-            return 'unavailable'; // Or 'config_error' as a safer default
-        }
-    }, []); // Empty dependency array ensures this runs only once
+        if (!isFirebaseAvailable && firebaseInitializationError) return 'config_error';
+        if (isFirebaseAvailable) return 'available';
+        return 'unavailable';
+    }, []); // No dependencies needed
 
     // --- Hooks ---
-    // Pass the determined initial status to the hooks
     const {
         currentUser, authLoading, isLoginModalOpen, isSignUpModalOpen, verificationWarning,
         resendCooldownActive, resendStatusMessage, handleLoginClick, handleLogoutClick,
         handleSignUpClick, handleCloseLoginModal, handleCloseSignUpModal, handleSwitchToLogin,
         handleSwitchToSignUp, handleResendVerificationEmail
-    } = useAuth(initialFirebaseStatus); // Use derived initial status
+    } = useAuth(initialFirebaseStatus);
 
     const {
         treeData, dbDataStatus, dataWarningMessage, handleImportData, handleExportData,
         handleAddPerson, handleEditPerson, handleDeletePerson
-        // Removed fetchTreeData from destructuring as it's called internally by the hook now
-    } = useTreeData(currentUser, initialFirebaseStatus); // Use derived initial status
+    } = useTreeData(currentUser, initialFirebaseStatus);
 
     const {
         familyNameOptions, naipeOptions, instrumentOptions, hierarchyOptions
     } = useDropdownOptions(treeData);
 
-    // --- State managed directly by App (mostly for modals) ---
+    // --- App-level State (mostly for modals/UI interactions) ---
     const [isPersonFormOpen, setIsPersonFormOpen] = useState(false);
     const [personToEdit, setPersonToEdit] = useState<Person | null>(null);
-    const [parentForNewPersonId, setParentForNewPersonId] = useState<string | null>(null);
+    // Renamed state variable for clarity
+    const [targetParentId, setTargetParentId] = useState<string | null>(null); // ID of node where "+" was clicked
     const [editMode, setEditMode] = useState<EditMode>('add');
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [personToDelete, setPersonToDelete] = useState<{ id: string, name: string } | null>(null);
@@ -65,10 +53,11 @@ function App() {
     // --- Combine Warning Messages ---
     const displayWarning = verificationWarning || dataWarningMessage;
 
-    // --- Handlers connecting UI actions to Hooks/State (No changes needed in these handlers) ---
-    const handleAddPersonClick = useCallback((padrinhoId: string) => {
+    // --- UI Action Handlers that trigger logic or set modal state ---
+    const handleAddPersonClick = useCallback((clickedNodeId: string) => { // Parameter is the ID of the node clicked
         if (!currentUser || !currentUser.emailVerified) { alert("Login and verify email to add members."); return; }
-        setParentForNewPersonId(padrinhoId);
+        console.log(`UI: Add clicked under node ID: ${clickedNodeId}`); // Debug log
+        setTargetParentId(clickedNodeId); // Store the ID of the clicked node (potential parent)
         setPersonToEdit(null);
         setEditMode('add');
         setIsPersonFormOpen(true);
@@ -77,7 +66,7 @@ function App() {
     const handleEditPersonClick = useCallback((person: Person) => {
         if (!currentUser || !currentUser.emailVerified) { alert("Login and verify email to edit members."); return; }
         setPersonToEdit(person);
-        setParentForNewPersonId(null);
+        setTargetParentId(null); // Not adding, so no target parent needed
         setEditMode('edit');
         setIsPersonFormOpen(true);
     }, [currentUser]);
@@ -89,23 +78,35 @@ function App() {
     }, [currentUser]);
 
     const handlePersonFormSubmit = useCallback(async (
-        personFormData: Omit<Person, 'id' | 'children' | 'padrinhoId'> & { id?: string }
+        // Form data excludes id, parentId, children
+        personFormData: Omit<Person, 'id' | 'parentId' | 'children'> & { id?: string }
     ) => {
         let success = false;
-        if (editMode === 'edit' && personFormData.id) {
-            success = await handleEditPerson(personFormData as Person);
-        } else if (editMode === 'add' && parentForNewPersonId) {
-            success = await handleAddPerson(personFormData, parentForNewPersonId);
+        if (editMode === 'edit' && personToEdit?.id) { // Use personToEdit for ID in edit mode
+            // Ensure id is passed correctly for editing
+            success = await handleEditPerson({ ...personFormData, id: personToEdit.id });
+        } else if (editMode === 'add' && targetParentId) { // Use targetParentId for adding
+            success = await handleAddPerson(personFormData, targetParentId);
         } else {
-            console.error("Invalid state for form submission"); alert("Error submitting form."); return;
+            console.error("Invalid state for form submission: editMode or targetParentId missing.");
+            alert("Error submitting form."); return;
         }
-        if (success) { setIsPersonFormOpen(false); setPersonToEdit(null); setParentForNewPersonId(null); }
-    }, [editMode, parentForNewPersonId, handleAddPerson, handleEditPerson]);
+
+        if (success) {
+            setIsPersonFormOpen(false);
+            setPersonToEdit(null);
+            setTargetParentId(null); // Clear target parent after successful add/edit
+        }
+        // Decide if form should stay open on failure based on feedback from hooks
+    }, [editMode, targetParentId, personToEdit, handleAddPerson, handleEditPerson]); // Added personToEdit dependency
 
     const handleConfirmDelete = useCallback(async () => {
         if (!personToDelete) return;
         const success = await handleDeletePerson(personToDelete.id);
-        if (success) { setIsDeleteConfirmOpen(false); setPersonToDelete(null); }
+        if (success) {
+            setIsDeleteConfirmOpen(false);
+            setPersonToDelete(null);
+        }
     }, [personToDelete, handleDeletePerson]);
 
     const handleNodeClick = useCallback((person: Person) => {
@@ -114,22 +115,18 @@ function App() {
     }, []);
 
     const handleCloseDetailsModal = useCallback(() => {
-        setIsDetailsModalOpen(false); setSelectedPersonForDetails(null);
+        setIsDetailsModalOpen(false);
+        setSelectedPersonForDetails(null);
     }, []);
 
-
     // --- Render Logic ---
-    // REMOVE the explicit 'checking' state check, rely on authLoading instead
-    // if (initialFirebaseStatus === 'checking') { // <-- REMOVE THIS BLOCK
-    //    return ( <div className="App"> <header className="App-header"> <div className="loading">Initializing...</div> </header> </div> );
-    // }
+    // No 'checking' state needed here anymore
 
-    // AppLayout will handle showing "Loading User..." based on authLoading prop
     return (
         <AppLayout
-            // Auth State & Handlers
+            // Pass all necessary props...
             currentUser={currentUser}
-            authLoading={authLoading} // Pass authLoading to AppLayout
+            authLoading={authLoading}
             isLoginModalOpen={isLoginModalOpen}
             isSignUpModalOpen={isSignUpModalOpen}
             verificationWarning={verificationWarning}
@@ -143,23 +140,20 @@ function App() {
             handleSwitchToLogin={handleSwitchToLogin}
             handleSwitchToSignUp={handleSwitchToSignUp}
             handleResendVerificationEmail={handleResendVerificationEmail}
-            // Tree Data State & Handlers
             treeData={treeData}
             dbDataStatus={dbDataStatus}
-            warningMessage={displayWarning} // Pass combined warning
+            warningMessage={displayWarning}
             handleImportData={handleImportData}
             handleExportData={handleExportData}
-            handleAddPersonClick={handleAddPersonClick}
+            handleAddPersonClick={handleAddPersonClick} // Passes the ID of the clicked node
             handleDeletePersonClick={handleDeletePersonClick}
             handleEditPersonClick={handleEditPersonClick}
             handleNodeClick={handleNodeClick}
-            // Dropdown Options
             familyNameOptions={familyNameOptions}
             naipeOptions={naipeOptions}
             instrumentOptions={instrumentOptions}
             hierarchyOptions={hierarchyOptions}
-            // Modal State & Handlers
-            firebaseStatus={initialFirebaseStatus} // Pass derived initial status
+            firebaseStatus={initialFirebaseStatus}
             isPersonFormOpen={isPersonFormOpen}
             personToEdit={personToEdit}
             editMode={editMode}
@@ -176,7 +170,7 @@ function App() {
             setIsGenericConfirmOpen={setIsGenericConfirmOpen}
             handleCloseDetailsModal={handleCloseDetailsModal}
             onGenericConfirm={onGenericConfirm}
-            // Dummy setters if not needed for generic confirm modal
+            // Pass dummy setters if generic confirm modal doesn't need them
             setPendingSubmitData={() => {}}
             setOnGenericConfirm={setOnGenericConfirm}
         />

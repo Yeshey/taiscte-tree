@@ -1,52 +1,55 @@
 // src/utils/treeHelpers.ts
-// We keep this file for potential future generic helpers,
-// but the main tree transformation logic for the Tuna structure
-// is now within GenealogyTree.tsx for simplicity with Padrinho logic.
-
 import { Person } from '../types/models';
 
-// Helper function to find a person by ID (still useful)
+// Helper function to find a person by ID (no change needed)
 export const findPersonById = (id: string, people: Person[]): Person | undefined => {
   return people.find(person => person.id === id);
 };
 
-// Get 'Afilhados' (direct children in the new structure)
-export const getAfilhados = (person: Person, allPeople: Person[]): Person[] => {
+// Renamed and updated to use parentId
+export const getChildren = (person: Person, allPeople: Person[]): Person[] => {
     if (!person?.id) return [];
-    return allPeople.filter(p => p.padrinhoId === person.id);
+    // Find people whose parentId matches the current person's id
+    return allPeople.filter(p => p.parentId === person.id);
 };
 
-// Get 'Padrinho' (direct parent in the new structure)
-export const getPadrinho = (person: Person, allPeople: Person[]): Person | undefined => {
-    if (!person?.padrinhoId) return undefined;
-    return findPersonById(person.padrinhoId, allPeople);
+// Renamed and updated to use parentId
+export const getParent = (person: Person, allPeople: Person[]): Person | undefined => {
+    // Use parentId
+    if (!person?.parentId) return undefined;
+    return findPersonById(person.parentId, allPeople);
 };
 
-// Get all descendants ('Afilhado' lineage)
+// Updated to use renamed helpers and parentId
 export const getDescendants = (person: Person, allPeople: Person[]): Person[] => {
   if (!person?.id) return [];
   const descendants: Person[] = [];
-  const directAfilhados = getAfilhados(person, allPeople);
-  descendants.push(...directAfilhados);
+  // Use getChildren
+  const directChildren = getChildren(person, allPeople);
+  descendants.push(...directChildren);
 
-  for (const afilhado of directAfilhados) {
-    descendants.push(...getDescendants(afilhado, allPeople));
+  for (const child of directChildren) {
+    // Recursive call remains the same conceptually
+    descendants.push(...getDescendants(child, allPeople));
   }
   return descendants;
 };
 
-// Get all ancestors ('Padrinho' lineage)
+// Updated to use renamed helpers and parentId
 export const getAncestors = (person: Person, allPeople: Person[]): Person[] => {
-   if (!person?.padrinhoId) return [];
+   // Use parentId
+   if (!person?.parentId) return [];
    const ancestors: Person[] = [];
-   const padrinho = getPadrinho(person, allPeople);
+   // Use getParent
+   const parent = getParent(person, allPeople);
 
-   if (padrinho) {
-       ancestors.push(padrinho);
-       ancestors.push(...getAncestors(padrinho, allPeople));
+   if (parent) {
+       ancestors.push(parent);
+       // Recursive call remains the same conceptually
+       ancestors.push(...getAncestors(parent, allPeople));
    }
    return ancestors;
 };
 
 // NOTE: transformDataForTree based on 'parents' is removed.
-// The Tuna-specific transformation happens inside GenealogyTree.tsx's useMemo.
+// The Tuna-specific transformation happens inside GenealogyTree.tsx's useMemo. // This comment is now outdated as transformation is in treeTransform.ts

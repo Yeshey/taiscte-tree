@@ -3,22 +3,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { ref, get, set, DatabaseReference } from 'firebase/database';
 import { Person } from '../types/models';
-import { validateAndNormalizePersonData } from '../components/ExportImport'; // Need validator
+import { validateAndNormalizePersonData } from '../components/ExportImport'; // Keep validator import
 import { demoData } from '../data/demoData';
-import { database } from '../firebase'; // Assuming firebase.ts exports database
+import { database } from '../firebase';
 import * as AppStrings from '../constants/strings';
 
 export type DbDataStatus = 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
 export type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available'; // Redefine or import
 
-// --- Validate demo data on initial load (important fallback) ---
 const { validData: initialValidatedDemoData, errors: demoErrors } = validateAndNormalizePersonData(demoData);
 if (!initialValidatedDemoData) {
     console.error("FATAL: Demo data is invalid in useTreeData!", demoErrors);
 }
 
-// Helper: Date comparison (can be moved to utils)
 const isDateOlderThanYears = (dateStr: string | undefined, years: number): boolean => {
+    // ... (implementation)
     if (!dateStr) return false;
     try {
         const date = new Date(dateStr + 'T00:00:00');
@@ -29,147 +28,84 @@ const isDateOlderThanYears = (dateStr: string | undefined, years: number): boole
     } catch { return false; }
 };
 
-
 export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseStatus) {
     const [treeData, setTreeData] = useState<Person[]>(initialValidatedDemoData || []);
     const [dbDataStatus, setDbDataStatus] = useState<DbDataStatus>('idle');
-    // Separate warning for data issues vs. auth/config issues
     const [dataWarningMessage, setDataWarningMessage] = useState<string | null>(null);
 
-    // Fetch Data Logic
-    const fetchTreeData = useCallback(async () => {
-        if (!database) {
-            console.error("Database service unavailable during fetch attempt.");
-            setDataWarningMessage(AppStrings.FIREBASE_DB_UNAVAILABLE);
-            setTreeData(initialValidatedDemoData || []); // Use validated demo data
-            setDbDataStatus('error');
-            return;
-        }
+    const fetchTreeData = useCallback(async () => { /* ... (no changes needed here) ... */
+        if (!database) { console.error("DB unavailable"); setDataWarningMessage(AppStrings.FIREBASE_DB_UNAVAILABLE); setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); return; }
         const treeDataRef: DatabaseReference = ref(database, 'treeData');
-        setDbDataStatus('loading');
-        setDataWarningMessage(null);
+        setDbDataStatus('loading'); setDataWarningMessage(null);
         try {
             const snapshot = await get(treeDataRef);
             if (snapshot.exists()) {
                 const dataFromDb = snapshot.val();
+                // *** IMPORTANT: Ensure validation handles parentId and no children ***
                 const { validData, errors } = validateAndNormalizePersonData(dataFromDb);
-                if (validData) {
-                    setTreeData(validData);
-                    setDbDataStatus('loaded');
-                    if (errors.length > 0) { console.warn("Minor validation issues in fetched data:", errors); }
-                } else {
-                    console.error("Validation failed for fetched data:", errors);
-                    setDataWarningMessage(AppStrings.FIREBASE_DATA_ERROR(errors.join(', ')));
-                    setTreeData(initialValidatedDemoData || []);
-                    setDbDataStatus('error');
-                }
-            } else {
-                console.log("No data found in Firebase. Using demo data.");
-                setDataWarningMessage("No data in Firebase, showing default tree.");
-                setTreeData(initialValidatedDemoData || []);
-                setDbDataStatus('empty');
-            }
-        } catch (error: any) {
-            console.error("Error fetching data from Firebase DB:", error);
-            if (error.code === 'PERMISSION_DENIED') setDataWarningMessage(AppStrings.FIREBASE_FETCH_PERMISSION_ERROR);
-            else setDataWarningMessage(AppStrings.FIREBASE_FETCH_ERROR(error.message));
-            setTreeData(initialValidatedDemoData || []);
-            setDbDataStatus('error');
-        }
-    }, []); // No dependencies needed here, called based on firebaseStatus
+                if (validData) { setTreeData(validData); setDbDataStatus('loaded'); if (errors.length > 0) console.warn("Validation issues:", errors); }
+                else { console.error("Validation failed:", errors); setDataWarningMessage(AppStrings.FIREBASE_DATA_ERROR(errors.join(', '))); setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); }
+            } else { console.log("No data found"); setDataWarningMessage("No data in Firebase, showing default tree."); setTreeData(initialValidatedDemoData || []); setDbDataStatus('empty'); }
+        } catch (error: any) { console.error("Fetch error:", error); if (error.code === 'PERMISSION_DENIED') setDataWarningMessage(AppStrings.FIREBASE_FETCH_PERMISSION_ERROR); else setDataWarningMessage(AppStrings.FIREBASE_FETCH_ERROR(error.message)); setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); }
+    }, []);
 
-    // Save Data Logic
-    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => {
-        if (!database || !currentUser) {
-            console.error("Cannot save: DB unavailable or user not logged in.");
-            alert(AppStrings.SAVE_UNAVAILABLE); return false;
-        }
-        if (!currentUser.emailVerified) {
-             alert("Cannot save data: Email not verified."); return false;
-        }
-
+    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => { /* ... (no changes needed here, relies on validation) ... */
+        if (!database || !currentUser) { alert(AppStrings.SAVE_UNAVAILABLE); return false; }
+        if (!currentUser.emailVerified) { alert("Cannot save data: Email not verified."); return false; }
+        // *** IMPORTANT: Ensure validation handles parentId and no children ***
         const { validData, errors } = validateAndNormalizePersonData(dataToSave);
-        if (!validData) {
-            console.error("Cannot save: Data validation failed.", errors);
-            alert(AppStrings.SAVE_FAILED_INVALID_DATA(errors)); return false;
-        }
-        if (errors.length > 0) console.warn("Saving data with minor validation warnings:", errors);
-
-        console.log("Attempting to save validated data to Firebase...");
+        if (!validData) { alert(AppStrings.SAVE_FAILED_INVALID_DATA(errors)); return false; }
+        if (errors.length > 0) console.warn("Saving with warnings:", errors);
         try {
-            const treeDataRef = ref(database, 'treeData');
-            await set(treeDataRef, validData);
-            setDataWarningMessage(AppStrings.SAVE_SUCCESS); // Use data warning for save status
-            setTimeout(() => setDataWarningMessage(null), 3000);
-            return true;
-        } catch (error: any) {
-            console.error("Error saving data to Firebase:", error);
-            if (error.code === 'PERMISSION_DENIED') alert(AppStrings.SAVE_FAILED_PERMISSION);
-            else alert(AppStrings.SAVE_FAILED_GENERAL(error.message));
-            return false;
-        }
-    }, [currentUser]); // Depends on currentUser for logged-in & verified check
+            const treeDataRef = ref(database, 'treeData'); await set(treeDataRef, validData);
+            setDataWarningMessage(AppStrings.SAVE_SUCCESS); setTimeout(() => setDataWarningMessage(null), 3000); return true;
+        } catch (error: any) { console.error("Save error:", error); if (error.code === 'PERMISSION_DENIED') alert(AppStrings.SAVE_FAILED_PERMISSION); else alert(AppStrings.SAVE_FAILED_GENERAL(error.message)); return false; }
+     }, [currentUser]);
 
-    // Effect for Initial Fetch
-    useEffect(() => {
-        if (firebaseStatus === 'available') {
-            fetchTreeData();
-        } else if (firebaseStatus === 'config_error') {
-            // Ensure demo data is loaded if config is bad
-            setTreeData(initialValidatedDemoData || []);
-            setDbDataStatus('error'); // Indicate data cannot be reliably fetched/saved
-        }
-        // Clear warnings when status changes (e.g., from error to checking/available)
+    useEffect(() => { /* ... (Initial Fetch effect - no changes needed) ... */
+        if (firebaseStatus === 'available') { fetchTreeData(); }
+        else if (firebaseStatus === 'config_error') { setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); }
         setDataWarningMessage(null);
     }, [firebaseStatus, fetchTreeData]);
 
-    // Effect for Tuno Check
-     useEffect(() => {
+    useEffect(() => { /* ... (Tuno Check effect - no changes needed) ... */
         if (firebaseStatus === 'available' && currentUser && dbDataStatus === 'loaded') {
             const tunoName = AppStrings.HIERARCHIA_BASE_LEVELS.find(l => l.key === 'tuno')?.defaultName;
             const tunos = treeData.filter(p => p.hierarquia === tunoName && isDateOlderThanYears(p.passagemTunoDate, 2));
-            if (tunos.length > 0) {
-                const names = tunos.map(p => p.name).join(', ');
-                const msg = `Review Needed: ${names} ${tunos.length > 1 ? 'have' : 'has'} been 'Tuno' for over 2 years.`;
-                // Append to existing warning if any, or set new one
-                setDataWarningMessage(prev => prev ? `${prev}\n${msg}` : msg);
-            }
+            if (tunos.length > 0) { const names = tunos.map(p => p.name).join(', '); const msg = `Review Needed: ${names}...`; setDataWarningMessage(prev => prev ? `${prev}\n${msg}` : msg); }
         }
-    }, [treeData, currentUser, firebaseStatus, dbDataStatus]); // Rerun when data/user/status changes
+    }, [treeData, currentUser, firebaseStatus, dbDataStatus]);
 
     // --- CRUD Handlers ---
-    // These modify the state directly and attempt to save
     const handleAddPerson = useCallback(async (
-        personFormData: Omit<Person, 'id' | 'children' | 'padrinhoId'>, // Form data minus relationships/id
-        padrinhoId: string
+        personFormData: Omit<Person, 'id' | 'parentId'>, // Form data doesn't include parentId
+        targetParentId: string // The ID of the node clicked
     ) => {
-        const parentIndex = treeData.findIndex(p => p.id === padrinhoId);
-        if (parentIndex === -1) {
-            console.error(`Parent (Padrinho) with ID ${padrinhoId} not found!`);
-            alert(`Error: Could not find the Padrinho/Madrinha.`);
-            return false; // Indicate failure
+        // Parent existence check is less critical now as tree builds differently,
+        // but good to ensure the targetParentId is valid if possible.
+        const parentExists = treeData.some(p => p.id === targetParentId);
+        if (!parentExists && targetParentId !== 'root' && targetParentId !== 'artificial_root') { // Allow adding under artificial roots
+             console.warn(`Attempting to add under non-existent parent ID: ${targetParentId}`);
+             // Decide if this should be an error or just proceed adding as an orphan/root
+             // Let's proceed, transformTunaDataForTree will handle it.
         }
 
         const newPerson: Person = {
             ...personFormData,
             id: crypto.randomUUID(),
-            padrinhoId: padrinhoId,
-            children: [],
+            parentId: (targetParentId === 'root' || targetParentId === 'artificial_root') ? undefined : targetParentId, // Set parentId or undefined for root adds
+            // No children array to initialize
         };
 
-        const updatedTree = [...treeData];
-        updatedTree.push(newPerson);
-        updatedTree[parentIndex] = {
-            ...updatedTree[parentIndex],
-            children: [...updatedTree[parentIndex].children, newPerson.id]
-        };
+        const updatedTree = [...treeData, newPerson]; // Just add the new person to the flat list
 
-        setTreeData(updatedTree); // Update local state first
+        setTreeData(updatedTree); // Update local state
         return await saveTreeDataToFirebase(updatedTree); // Attempt to save
     }, [treeData, saveTreeDataToFirebase]);
 
     const handleEditPerson = useCallback(async (
-        personFormData: Omit<Person, 'children' | 'padrinhoId'> & { id: string } // Requires ID, excludes relationships
+        // Form data includes id, excludes parentId (can't change parent via edit form)
+        personFormData: Omit<Person, 'parentId'> & { id: string }
     ) => {
         const personIndex = treeData.findIndex(p => p.id === personFormData.id);
         if (personIndex === -1) {
@@ -181,7 +117,7 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
         const updatedTree = [...treeData];
         const originalPerson = updatedTree[personIndex];
         updatedTree[personIndex] = {
-            ...originalPerson, // Keep existing children and padrinhoId
+            ...originalPerson, // Keep existing parentId
             ...personFormData, // Overwrite with new form data
         };
 
@@ -190,73 +126,44 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
     }, [treeData, saveTreeDataToFirebase]);
 
     const handleDeletePerson = useCallback(async (personIdToDelete: string) => {
-        const childPerson = treeData.find(p => p.id === personIdToDelete);
-        if (!childPerson) {
-             console.error("Person to delete not found!"); return false;
-        }
+        // Find children (people whose parentId points to the one being deleted)
+        const childrenOfDeleted = treeData.filter(p => p.parentId === personIdToDelete);
 
-        let parentPerson: Person | undefined = undefined;
-        if (childPerson.padrinhoId) {
-            parentPerson = treeData.find(p => p.id === childPerson.padrinhoId);
-        }
-        const childrenOfDeleted = treeData.filter(p => p.padrinhoId === personIdToDelete);
+        // 1. Filter out the person to be deleted
+        let updatedTree = treeData.filter(p => p.id !== personIdToDelete);
 
-        let updatedTree = treeData.filter(p => p.id !== personIdToDelete); // Remove person
-
-        // Update parent's children list
-        if (parentPerson) {
+        // 2. Make the direct children orphans (set their parentId to undefined)
+        if (childrenOfDeleted.length > 0) {
+            const childIdsToUpdate = new Set(childrenOfDeleted.map(c => c.id));
             updatedTree = updatedTree.map(p =>
-                p.id === parentPerson!.id
-                    ? { ...p, children: p.children.filter(id => id !== personIdToDelete) }
+                childIdsToUpdate.has(p.id)
+                    // Create a new object, copying existing props and setting parentId
+                    ? { ...p, parentId: undefined }
                     : p
             );
-        }
-        // Update children's padrinhoId
-        if (childrenOfDeleted.length > 0) {
-            const childIds = new Set(childrenOfDeleted.map(c => c.id));
-            updatedTree = updatedTree.map(p =>
-                childIds.has(p.id) ? { ...p, padrinhoId: undefined } : p
-            );
+            console.log(`Made ${childrenOfDeleted.length} children of ${personIdToDelete} orphans.`);
         }
 
         setTreeData(updatedTree);
         return await saveTreeDataToFirebase(updatedTree);
     }, [treeData, saveTreeDataToFirebase]);
 
-    // --- Import/Export ---
-     const handleImportData = useCallback(async (importedData: Person[]) => {
-        // Validation happens before calling this in ExportImport component
-        setTreeData(importedData); // Update local state immediately
-        setDataWarningMessage("Data imported locally."); // Initial message
-        // Attempt to save if conditions met
-        if (currentUser?.emailVerified) {
-            const saved = await saveTreeDataToFirebase(importedData);
-            if (!saved) {
-                 // If save failed, keep the warning specific to saving issues from saveTreeDataToFirebase
-            } else {
-                // If save succeeded, the message is already updated by saveTreeDataToFirebase
-                 setDataWarningMessage(null); // Or clear if save was successful
-                 setTimeout(() => setDataWarningMessage(null), 3000); // Clear success message
-            }
-        } else if (currentUser) {
-             setDataWarningMessage("Data imported locally. Verify your email to save to the shared tree.");
-             setTimeout(() => { if (dataWarningMessage?.includes("imported locally")) setDataWarningMessage(null); }, 5000);
-        } else {
-             setDataWarningMessage(AppStrings.IMPORT_LOCAL_WARNING); // Not logged in
-             setTimeout(() => { if (dataWarningMessage === AppStrings.IMPORT_LOCAL_WARNING) setDataWarningMessage(null); }, 5000);
-        }
-    }, [currentUser, saveTreeDataToFirebase, dataWarningMessage]); // Added dataWarningMessage to deps
+    // --- Import/Export (no changes needed here) ---
+    const handleImportData = useCallback(async (importedData: Person[]) => { /* ... */
+        setTreeData(importedData); setDataWarningMessage("Data imported locally.");
+        if (currentUser?.emailVerified) { const saved = await saveTreeDataToFirebase(importedData); if (saved) { setDataWarningMessage(null); setTimeout(() => setDataWarningMessage(null), 3000); } }
+        else if (currentUser) { setDataWarningMessage("Data imported locally. Verify your email to save."); setTimeout(() => { if (dataWarningMessage?.includes("imported locally")) setDataWarningMessage(null); }, 5000); }
+        else { setDataWarningMessage(AppStrings.IMPORT_LOCAL_WARNING); setTimeout(() => { if (dataWarningMessage === AppStrings.IMPORT_LOCAL_WARNING) setDataWarningMessage(null); }, 5000); }
+    }, [currentUser, saveTreeDataToFirebase, dataWarningMessage]);
 
-    const handleExportData = useCallback(() => {
-        // Consider running validation here too before returning data?
-        return treeData;
-    }, [treeData]);
+    const handleExportData = useCallback(() => treeData, [treeData]);
+
 
     return {
         treeData,
         dbDataStatus,
         dataWarningMessage,
-        fetchTreeData, // Expose fetch if manual refresh is needed
+        // fetchTreeData, // Not needed externally?
         handleImportData,
         handleExportData,
         handleAddPerson,

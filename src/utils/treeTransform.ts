@@ -1,12 +1,14 @@
 // src/utils/treeTransform.ts
 import { Person } from '../types/models';
-import TaiscteLogo from '../assets/TAISCTE_logo.png'; // Need logo for artificial root
+import TaiscteLogo from '../assets/TAISCTE_logo.png';
 
-// TreeNode definition needs to be accessible here too or imported from a shared types file
+// TreeNode definition - Children array is still needed for react-d3-tree
 export interface TreeNode {
     name: string;
-    attributes: Partial<Person> & { id: string; name: string; gender: string; familyName?: string };
-    children?: TreeNode[];
+    // Keep attributes similar, ensure parentId is there if needed for debugging
+    attributes: Partial<Person> & { id: string; name: string; gender: string; familyName?: string; parentId?: string };
+    children?: TreeNode[]; // This array is BUILT during transformation
+    // Internal properties added by react-d3-tree
     __rd3t?: {
       id: string;
       depth: number;
@@ -15,64 +17,75 @@ export interface TreeNode {
     _children?: TreeNode[];
 }
 
-// --- HSL Color Generation Logic ---
+// Color generation function (no change)
 export function generateHslColor(hue: number): string {
-  const saturation = 75; // Fixed saturation
-  const lightness = 60; // Fixed lightness
+  const saturation = 75;
+  const lightness = 60;
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
-// --- Tree Transformation Logic ---
-export const buildTunaTree = (personId: string | null, peopleMap: Map<string, Person>, processedIds: Set<string>): TreeNode | null => {
-    const person = personId ? peopleMap.get(personId) : null;
-    if (!person || processedIds.has(person.id)) return null;
-
-    processedIds.add(person.id);
-
-    const treeNode: TreeNode = {
-        name: person.name,
-        attributes: {
-            ...(person as any), // Spread all attributes
-            id: person.id,
-            name: person.name,
-            gender: person.gender,
-            familyName: person.familyName // Include familyName in attributes
-        },
-        children: []
-    };
-
-    const afilhados: TreeNode[] = [];
-    peopleMap.forEach(potentialAfilhado => {
-        // Check padrinhoId exists and is not the person themselves (prevent self-reference loop)
-        if (potentialAfilhado.padrinhoId && potentialAfilhado.padrinhoId === person.id && potentialAfilhado.id !== person.id) {
-            const childNode = buildTunaTree(potentialAfilhado.id, peopleMap, processedIds);
-            if (childNode) { afilhados.push(childNode); }
-        }
-    });
-
-    if (afilhados.length > 0) { treeNode.children = afilhados; }
-    return treeNode;
-};
+// --- Tree Transformation Logic - REWRITTEN ---
 
 export const transformTunaDataForTree = (people: Person[]): TreeNode => {
     if (!people || people.length === 0) {
          return { name: 'No Data', attributes: { id: 'no_data', name: 'No Data', gender: 'other' } };
     }
-    const peopleMap = new Map(people.map(p => [p.id, p]));
-    const processedIds = new Set<string>();
-    const rootPeople = people.filter(p => !p.padrinhoId || !peopleMap.has(p.padrinhoId));
 
-    if (rootPeople.length === 0 && people.length > 0) {
-        console.warn("No clear root nodes found. Creating artificial root.");
-        const allNodes = people
-            .map(p => buildTunaTree(p.id, peopleMap, new Set())) // Use new Set for each top-level build attempt
-            .filter(node => node !== null) as TreeNode[];
-        return { name: 'TAISCTE', attributes: { id: 'artificial_root', name: 'TAISCTE', gender: 'other',  imageUrl: TaiscteLogo }, children: allNodes };
-    } else if (rootPeople.length === 1) {
-        // If single root, build the tree starting from them
-        return buildTunaTree(rootPeople[0].id, peopleMap, processedIds) || { name: 'Error', attributes: { id: 'error', name: 'Error generating tree', gender: 'other' } };
+    const peopleMap = new Map(people.map(p => [p.id, p]));
+    const nodesMap = new Map<string, TreeNode>();
+    const rootNodes: TreeNode[] = [];
+
+    // 1. Create a TreeNode for each person and store it in a map
+    people.forEach(person => {
+        const treeNode: TreeNode = {
+            name: person.name,
+            attributes: {
+                ...(person as any), // Spread all person data into attributes
+                id: person.id,
+                name: person.name,
+                gender: person.gender,
+                familyName: person.familyName,
+                parentId: person.parentId // Keep parentId in attributes if helpful
+            },
+            children: [] // Initialize children array - this will be populated
+        };
+        nodesMap.set(person.id, treeNode);
+    });
+
+    // 2. Link nodes based on parentId
+    nodesMap.forEach(node => {
+        const parentId = node.attributes.parentId;
+        if (parentId) {
+            const parentNode = nodesMap.get(parentId);
+            if (parentNode) {
+                // Ensure parentNode.children exists (it should due to initialization)
+                parentNode.children = parentNode.children || [];
+                parentNode.children.push(node); // Add current node as a child of its parent
+            } else {
+                // Parent mentioned but not found in the data - treat as a root node
+                console.warn(`Person ${node.name} (ID: ${node.attributes.id}) has parentId ${parentId}, but parent node not found. Treating as root.`);
+                rootNodes.push(node);
+            }
+        } else {
+            // No parentId means it's a root node
+            rootNodes.push(node);
+        }
+    });
+
+    // 3. Determine final structure (single root or artificial root)
+    if (rootNodes.length === 0 && nodesMap.size > 0) {
+        // Should not happen if data is consistent, but handle cyclic data case
+        console.error("Circular dependency detected or no root nodes found! Returning all nodes under artificial root.");
+        return { name: 'TAISCTE (Error)', attributes: { id: 'error_root', name: 'TAISCTE (Error)', gender: 'other', imageUrl: TaiscteLogo }, children: Array.from(nodesMap.values()) };
+    } else if (rootNodes.length === 1) {
+        // Single root node - this is the tree
+        return rootNodes[0];
     } else {
-         // If multiple roots, create an artificial root above them
-         return { name: 'TAISCTE', attributes: { id: 'root', name: 'TAISCTE', gender: 'other', imageUrl: TaiscteLogo }, children: rootPeople.map(root => buildTunaTree(root.id, peopleMap, processedIds)).filter(node => node !== null) as TreeNode[] };
+        // Multiple root nodes - create an artificial root
+        console.log(`Found ${rootNodes.length} root nodes. Creating artificial TAISCTE root.`);
+        return { name: 'TAISCTE', attributes: { id: 'root', name: 'TAISCTE', gender: 'other', imageUrl: TaiscteLogo }, children: rootNodes };
     }
 };
+
+// buildTunaTree function is no longer needed with this approach
+// export const buildTunaTree = (...) => { ... };
