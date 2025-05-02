@@ -14,6 +14,7 @@ import { auth, database, isFirebaseAvailable, firebaseInitializationError } from
 import { onAuthStateChanged, User, signOut, sendEmailVerification } from 'firebase/auth';
 import { ref, get, set, DatabaseReference } from 'firebase/database';
 import * as AppStrings from './constants/strings'; // Import Strings
+import PersonDetailsModal from 'components/PersonDetailsModal';
 
 type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available';
 type DbDataStatus = 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
@@ -60,7 +61,8 @@ function App() {
   const [genericConfirmMessage, setGenericConfirmMessage] = useState<string>('');
   const [onGenericConfirm, setOnGenericConfirm] = useState<(() => void) | null>(null);
   const [pendingSubmitData, setPendingSubmitData] = useState<Omit<Person, 'id' | 'children'> & { id?: string } | null>(null);
-
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedPersonForDetails, setSelectedPersonForDetails] = useState<Person | null>(null);
 
   // --- Memoized Dropdown Options ---
   const naipeOptions: string[] = useMemo(() => { // Add : string[]
@@ -431,6 +433,16 @@ function App() {
       setPersonToDelete(null);
     };  
 
+    const handleNodeClick = (person: Person) => {
+      setSelectedPersonForDetails(person);
+      setIsDetailsModalOpen(true);
+    };
+  
+    const handleCloseDetailsModal = () => {
+      setIsDetailsModalOpen(false);
+      setSelectedPersonForDetails(null); // Clear selected person
+    };
+
   // --- Render Logic ---
 
   // Only show full page loading while checking Firebase config
@@ -448,42 +460,28 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        {/* Account Indicator - shows based on auth status/loading */}
-        {firebaseStatus !== 'config_error' && auth && (
-            <AccountIndicator
-                currentUser={currentUser}
-                onLoginClick={handleLoginClick}
-                onLogoutClick={handleLogoutClick}
-                onSignUpClick={handleSignUpClick}
-                // Optionally pass authLoading to show internal loading state
-                // isLoading={authLoading}
-            />
-        )}
-        {/* Show placeholder or nothing while auth is loading if preferred */}
+        {/* Account Indicator */}
+        {firebaseStatus !== 'config_error' && auth && (<AccountIndicator {...{ currentUser, onLoginClick: handleLoginClick, onLogoutClick: handleLogoutClick, onSignUpClick: handleSignUpClick }}/> )}
         {authLoading && firebaseStatus !== 'config_error' && <div style={{position: 'absolute', top: '15px', right: '20px', zIndex: 110}}>Loading User...</div>}
 
+        <h1>Família TAISCTE</h1>
 
-        <h1>Genealogia TAISCTE</h1>
-
-        {/* Verification Warning */}
-         {verificationWarning && !warningMessage && ( <div className="firebase-warning warning"> <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}> <span>{verificationWarning}</span> {currentUser && !currentUser.emailVerified && ( <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? "Please wait before resending" : "Send another verification email"}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && ( <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
-        {/* Other Warnings */}
+        {/* Warnings */}
+        {verificationWarning && !warningMessage && ( <div className="firebase-warning warning"> <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}> <span>{verificationWarning}</span> {currentUser && !currentUser.emailVerified && ( <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && ( <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
         {warningMessage && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}><p>{warningMessage}</p></div> )}
 
         <ExportImport {...{ onImport: handleImportData, onExport: handleExportData, isUserLoggedIn: !!currentUser, isFirebaseAvailable: firebaseStatus === 'available' }} />
 
         <div className="tree-container">
-          {/* Show loading message *inside* container only when fetching */}
-          {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? (
-             <div className="loading">Loading tree data from Firebase...</div>
-          ) : (
+          {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? ( <div className="loading">Loading tree data from Firebase...</div> ) : (
              <GenealogyTree
-                data={treeData} // Starts with demo, updates when fetch completes
+                data={treeData}
                 allPeople={treeData}
                 onAddPersonClick={handleAddPersonClick}
                 onDeletePersonClick={handleDeletePersonClick}
                 onEditPersonClick={handleEditPersonClick}
                 isUserLoggedIn={!!currentUser && (currentUser?.emailVerified ?? false)}
+                onNodeClick={handleNodeClick} // <-- Pass the node click handler
              />
           )}
         </div>
@@ -498,18 +496,24 @@ function App() {
           onSubmit={handlePersonFormSubmit}
           initialData={personToEdit}
           formTitle={editMode === 'edit' ? 'Edit Person' : 'Add New Afilhado'}
-          naipeOptions={naipeOptions}
-          instrumentOptions={instrumentOptions}
-          hierarchyOptions={hierarchyOptions}
-          padrinhoOptions={padrinhoOptions}
+          naipeOptions={naipeOptions} instrumentOptions={instrumentOptions} hierarchyOptions={hierarchyOptions} padrinhoOptions={padrinhoOptions}
           isEditMode={editMode === 'edit'}
       />
       <Modal {...{isOpen: isDeleteConfirmOpen, onClose: () => setIsDeleteConfirmOpen(false), onConfirm: handleConfirmDelete, title: AppStrings.CONFIRM_DELETE_TITLE, confirmText:"Delete", cancelText:"Cancel" }}>
           <p>{AppStrings.CONFIRM_DELETE_MSG(personToDelete?.name || 'this person')}</p>
       </Modal>
-       <Modal isOpen={isGenericConfirmOpen} onClose={() => { setIsGenericConfirmOpen(false); setPendingSubmitData(null); setOnGenericConfirm(null); }} onConfirm={() => { if (onGenericConfirm) { onGenericConfirm(); } setIsGenericConfirmOpen(false); }} title="Confirm Action" confirmText="Continue" cancelText="Cancel" >
+      <Modal isOpen={isGenericConfirmOpen} onClose={() => { setIsGenericConfirmOpen(false); setPendingSubmitData(null); setOnGenericConfirm(null); }} onConfirm={() => { if (onGenericConfirm) { onGenericConfirm(); } setIsGenericConfirmOpen(false); }} title="Confirm Action" confirmText="Continue" cancelText="Cancel" >
            <p>{genericConfirmMessage}</p>
-       </Modal>
+      </Modal>
+
+      {/* --- Render Details Modal --- */}
+      <PersonDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={handleCloseDetailsModal}
+        person={selectedPersonForDetails}
+        allPeople={treeData} // Pass all people for lookup
+      />
+
     </div>
   );
 }

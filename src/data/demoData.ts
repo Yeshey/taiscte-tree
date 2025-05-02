@@ -11,7 +11,7 @@ export const demoData: Person[] = [
   // Founding Members / Early Generation (No Padrinhos in this set)
   {
     id: 'padrinho_mestre',
-    name: 'Matias "O Fundador" Alves',
+    name: 'Matias Alves',
     nickname: "O Fundador",
     gender: 'male',
     padrinhoId: undefined, // No padrinho listed
@@ -30,8 +30,8 @@ export const demoData: Person[] = [
   },
   {
     id: 'madrinha_mestra',
-    name: 'Sofia "A Eterna" Costa',
-    nickname: "A Eterna",
+    name: 'Sofia Costa',
+    nickname: "Eterna",
     gender: 'female',
     padrinhoId: undefined,
     children: ['afilhado_3'],
@@ -49,7 +49,7 @@ export const demoData: Person[] = [
   // Second Generation (Afilhados of Founders)
   {
     id: 'afilhado_1',
-    name: 'Ricardo "Ritmo" Lima',
+    name: 'Ricardo Lima',
     nickname: 'Ritmo',
     gender: 'male',
     padrinhoId: 'padrinho_mestre', // Matias
@@ -65,7 +65,7 @@ export const demoData: Person[] = [
   },
   {
     id: 'afilhado_2',
-    name: 'Ana "Melodia" Silva',
+    name: 'Ana Silva',
     nickname: 'Melodia',
     gender: 'female',
     padrinhoId: 'padrinho_mestre', // Matias
@@ -82,7 +82,7 @@ export const demoData: Person[] = [
   },
    {
     id: 'afilhado_3',
-    name: 'Cláudia “Mé“ Morais', // Example from user prompt
+    name: 'Cláudia Morais', // Example from user prompt
     nickname: 'Mé',
     gender: 'female',
     padrinhoId: 'madrinha_mestra', // Sofia
@@ -99,7 +99,7 @@ export const demoData: Person[] = [
   // Third Generation (Netos)
   {
       id: 'neto_1',
-      name: 'Diogo "Dedos" Ferreira',
+      name: 'Diogo Ferreira',
       nickname: 'Dedos',
       gender: 'male',
       padrinhoId: 'afilhado_1', // Ricardo
@@ -115,7 +115,7 @@ export const demoData: Person[] = [
   },
    {
       id: 'neto_2',
-      name: 'Mariana "Voz" Pinto',
+      name: 'Mariana Pinto',
       nickname: 'Voz',
       gender: 'female',
       padrinhoId: 'afilhado_3', // Cláudia

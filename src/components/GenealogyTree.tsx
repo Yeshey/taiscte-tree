@@ -3,6 +3,7 @@ import React, { useState, useMemo, useCallback } from 'react'; // Added useState
 import Tree, { Point, RawNodeDatum, TreeNodeDatum, RenderCustomNodeElementFn } from 'react-d3-tree';
 import { Person } from '../types/models';
 import { PlusCircle, MinusCircle, Edit } from 'react-feather';
+import TaiscteLogo from '../assets/TAISCTE_logo.png';
 
 // Define TreeNode interface at the top level
 interface TreeNode {
@@ -29,6 +30,7 @@ interface GenealogyTreeProps {
     onDeletePersonClick: (personId: string, personName: string) => void;
     onEditPersonClick: (person: Person) => void;
     isUserLoggedIn: boolean;
+    onNodeClick: (person: Person) => void;
 }
 
 const GenealogyTree: React.FC<GenealogyTreeProps> = ({
@@ -37,7 +39,8 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
     onAddPersonClick,
     onDeletePersonClick,
     onEditPersonClick,
-    isUserLoggedIn
+    isUserLoggedIn,
+    onNodeClick
 }) => {
     // --- State and Hooks ---
     const [translate, setTranslate] = useState<Point>({ x: 0, y: 0 });
@@ -102,11 +105,11 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
             const allNodes = people
                 .map(p => buildTunaTree(p.id, peopleMap, new Set())) // Use new Set for each top-level build attempt
                 .filter(node => node !== null) as TreeNode[];
-            return { name: 'TAISCTE', attributes: { id: 'artificial_root', name: 'TAISCTE', gender: 'other', imageUrl: 'https://i.imgur.com/0lluid3.jpeg' }, children: allNodes };
+            return { name: 'TAISCTE', attributes: { id: 'artificial_root', name: 'TAISCTE', gender: 'other',  imageUrl: TaiscteLogo }, children: allNodes };
         } else if (rootPeople.length === 1) {
             return buildTunaTree(rootPeople[0].id, peopleMap, processedIds) || { name: 'Error', attributes: { id: 'error', name: 'Error generating tree', gender: 'other' } };
         } else {
-             return { name: 'TAISCTE', attributes: { id: 'root', name: 'TAISCTE', gender: 'other', imageUrl: 'https://i.imgur.com/0lluid3.jpeg' }, children: rootPeople.map(root => buildTunaTree(root.id, peopleMap, processedIds)).filter(node => node !== null) as TreeNode[] };
+             return { name: 'TAISCTE', attributes: { id: 'root', name: 'TAISCTE', gender: 'other',  imageUrl: TaiscteLogo }, children: rootPeople.map(root => buildTunaTree(root.id, peopleMap, processedIds)).filter(node => node !== null) as TreeNode[] };
         }
     }, [buildTunaTree]); // Depends on buildTunaTree
 
@@ -122,9 +125,15 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
     const handleZoomIn = () => { setZoom(prevZoom => Math.min(prevZoom * 1.2, maxZoom)); };
     const handleZoomOut = () => { setZoom(prevZoom => Math.max(prevZoom / 1.2, minZoom)); };
 
+    const cardWidth = 200;
+    const cardHeight = 185;
+    const bottomButtonSpacing = 30; // How much space buttons need
+    const noButtonSpacing = 5;      // Minimal space below card if no buttons
+    const bottomSpacing = isUserLoggedIn ? bottomButtonSpacing : noButtonSpacing;
+    const totalNodeHeight = cardHeight + bottomSpacing;
 
     // Render custom node element
-    const renderCustomNodeElement: RenderCustomNodeElementFn = ({ nodeDatum, toggleNode, }) => {
+    const renderCustomNodeElement: RenderCustomNodeElementFn = ({ nodeDatum, }) => {
         const nodeAttributes = nodeDatum.attributes || {};
         const personData = (nodeAttributes.id && nodeAttributes.name) ? nodeAttributes as unknown as Person : undefined;
 
@@ -167,65 +176,60 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
         const otherInstrumentsText = personData?.otherInstruments?.join(', ');
 
         // --- Positioning ---
-        const cardWidth = 200; const cardHeight = 180;
-        const cardX = -cardWidth / 2; const cardY = -cardHeight / 2;
-        const indicatorRadius = 6; const indicatorY = cardY + cardHeight + 15;
-        const buttonSize = 18; const buttonOffsetY = cardY + cardHeight + 8;
+        const cardX = -cardWidth / 2;
+        const cardY = -cardHeight / 2;
+        const buttonSize = 16;
+        const buttonOffsetY = cardY + cardHeight + 8;
         const buttonSpacing = 10;
         const editButtonX = -buttonSize / 2 - buttonSpacing;
         const deleteButtonX = 0;
         const addButtonX = buttonSize / 2 + buttonSpacing;
 
+        // --- Node Click Handler ---
+        const handleNodeCardClick = (event: React.MouseEvent) => {
+            event.stopPropagation();
+            if (personData && !isArtificialRoot) {
+                onNodeClick(personData);
+            }
+        };
 
         return (
-            <g onClick={toggleNode} style={{ cursor: 'pointer' }}>
-                {/* Card */}
+            // --- UPDATED: Main group click now opens modal ---
+            <g onClick={handleNodeCardClick} style={{ cursor: isArtificialRoot ? 'default' : 'pointer' }}>
+                {/* Main Node Card */}
                 <foreignObject width={cardWidth} height={cardHeight} x={cardX} y={cardY}>
                     <div style={styles.nodeCard}>
-                        <img src={imageUrl} alt={nodeName} style={isArtificialRoot ? styles.rootImage : styles.personImage} onError={(e) => { const t=e.target as HTMLImageElement; if(t.src!==placeholderImageUrl) t.src=placeholderImageUrl; }}/>
-                        <div style={styles.nodeName} title={displayName}>{displayName}</div>
+                    <img src={imageUrl} alt={nodeName} style={isArtificialRoot ? styles.rootImage : styles.personImage} onError={(e) => { const t=e.target as HTMLImageElement; if(t.src!==placeholderImageUrl) t.src=placeholderImageUrl; }}/>
+                    <div style={styles.nodeName} title={displayName}>{displayName}</div>
                         {!isArtificialRoot && personData && (
                             <>
-                                {personData.hierarquia && <div style={{...styles.nodeDetails, fontWeight: 'bold'}}>{personData.hierarquia}</div>}
-                                {personData.naipeVocal && <div style={styles.nodeDetails}>Naipe: {personData.naipeVocal}</div>}
-                                {personData.mainInstrument && <div style={styles.nodeDetails}>{personData.mainInstrument}</div>}
-                                {otherInstrumentsText && <div style={{...styles.nodeDetails, color: '#777', fontSize: '10px'}}>{otherInstrumentsText}</div>}
-                                {subidaDate && <div style={styles.nodeDate}>Subida: {subidaDate}</div>}
-                                {passagemDate && <div style={styles.nodeDate}>Passagem: {passagemDate}</div>}
-                                {saidaDate && <div style={styles.nodeDate}>Saída: {saidaDate}</div>}
-                                {personData.curso && <div style={styles.nodeDate}>Curso: {personData.curso}</div>}
-                                {(birthDate || deathDate) && (<div style={styles.nodeDate}>{birthDate ? `Nasc: ${birthDate}` : ''}{birthDate && deathDate ? ' - ' : ''}{deathDate ? `Falc: ${deathDate}` : ''}</div>)}
-                                {personData.notes && <div style={styles.nodeNotes}>Notes: {personData.notes}</div>}
+                                <div style={styles.nodeDetails}>{personData.hierarquia || '-'}</div>
+                                <div style={styles.nodeDetails}>{personData.naipeVocal || '-'}</div>
+                                <div style={styles.nodeDetails}>{personData.mainInstrument || '-'}</div>
                             </>
                         )}
-                         {isArtificialRoot && personData?.notes && <div style={styles.nodeNotes}>{personData.notes}</div>}
+                        {isArtificialRoot && <div style={{marginTop: '10px'}}>{nodeName}</div> /* Basic root display */}
+                        {/* --- End Simplified Content --- */}
                     </div>
                 </foreignObject>
 
-                {/* Indicator */}
-                {showExpandIndicator && ( <circle cx="0" cy={indicatorY} r={indicatorRadius} style={styles.indicatorCircle} onClick={(e) => { e.stopPropagation(); toggleNode(); }} /> )}
+                {/* --- REMOVED Expand/Collapse Indicator Circle --- */}
 
-                {/* Buttons */}
-                {canEdit && personData && ( <g transform={`translate(${editButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onEditPersonClick(personData); }} className="node-action-button"> <Edit size={buttonSize} color="#ffc107"/> </g> )}
-                {canDelete && ( <g transform={`translate(${deleteButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onDeletePersonClick(personData?.id || '', nodeName); }} className="node-action-button"> <MinusCircle size={buttonSize} color="#dc3545"/> </g> )}
-                {canAdd && ( <g transform={`translate(${addButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onAddPersonClick(personData?.id || ''); }} className="node-action-button"> <PlusCircle size={buttonSize} color="#28a745"/> </g> )}
+                {/* --- Action Buttons (position adjusted) --- */}
+                 {canEdit && personData && ( <g transform={`translate(${editButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onEditPersonClick(personData); }} className="node-action-button"> <Edit size={buttonSize} color="#ffc107"/> </g> )}
+                 {canDelete && ( <g transform={`translate(${deleteButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onDeletePersonClick(personData?.id || '', nodeName); }} className="node-action-button"> <MinusCircle size={buttonSize} color="#dc3545"/> </g> )}
+                 {canAdd && ( <g transform={`translate(${addButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onAddPersonClick(personData?.id || ''); }} className="node-action-button"> <PlusCircle size={buttonSize} color="#28a745"/> </g> )}
             </g>
         );
     };
 
-    // Adjust nodeSize
-    const nodeHeight = 180;
-    const bottomSpacing = 35;
-    const totalNodeHeight = nodeHeight + bottomSpacing;
+    
+    // Adjust nodeSize for the shorter card + buttons below
+    const nodeHeight = 85; // cardHeight
 
     // Loading/Empty check
-    if (!treeDataProp || treeDataProp.length === 0) {
-        // Show loading or specific message if needed, e.g., based on dbDataStatus from App
-        return <div className="loading">Loading tree data or tree is empty...</div>;
-    }
-    if (!treeData || ['No Data', 'Error'].includes(treeData.name)) {
-         return <div>{treeData.attributes.name || 'Could not generate tree structure.'}</div>;
-     }
+    if (!treeDataProp || treeDataProp.length === 0) { return <div className="loading">Loading tree data or tree is empty...</div>; }
+    if (!treeData || ['No Data', 'Error'].includes(treeData.name)) { return <div>{treeData.attributes.name || 'Could not generate tree structure.'}</div>; }
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -237,27 +241,63 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                 translate={translate} zoom={zoom} onUpdate={handleUpdate}
                 zoomable={true} scaleExtent={{ min: minZoom, max: maxZoom }}
                 renderCustomNodeElement={renderCustomNodeElement}
-                nodeSize={{ x: 240, y: totalNodeHeight }} // Wider nodes
-                separation={{ siblings: 1.1, nonSiblings: 1.4 }}
+                nodeSize={{ x: cardWidth + 20, y: totalNodeHeight }} // Use cardWidth, updated totalHeight
+                separation={{ siblings: 1.0, nonSiblings: 1.2 }} // Can be closer now
                 pathFunc="step"
-                // REMOVED initialDepth prop
-                transitionDuration={300}
+                // --- REMOVED initialDepth prop ---
+                // --- Disable collapsing on the Tree itself ---
+                collapsible={false}
+                transitionDuration={0} // No transition needed for clicks now
             />
         </div>
     );
 };
 
-// --- Styles ---
+// --- Update Styles ---
 const styles: { [key: string]: React.CSSProperties } = {
-    nodeCard: { border: '1px solid #ccc', borderRadius: '8px', padding: '10px', backgroundColor: 'white', width: '100%', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', },
-    nodeName: { fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '95%', },
-    nodeDetails: { fontSize: '12px', color: '#555', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '95%', },
-    nodeDate: { fontSize: '11px', color: '#777', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '95%', },
-    nodeNotes: { fontSize: '10px', fontStyle: 'italic', color: '#888', marginTop: 'auto', paddingTop: '4px', whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis', maxHeight: '2.4em', lineHeight: '1.2em', width: '95%'},
-    personImage: { width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', marginBottom: '6px', border: '1px solid #eee', flexShrink: 0 },
-    rootImage: { width: 'auto', height: '60px', maxWidth: '90%', objectFit: 'contain', marginBottom: '6px', flexShrink: 0 },
+    nodeCard: {
+        border: '1px solid #ccc', borderRadius: '8px', padding: '8px',
+        backgroundColor: 'white', width: '100%', height: '100%',
+        boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column', // Keep column layout
+        alignItems: 'center', // Center items horizontally
+        // justifyContent: 'center', // Remove or change to 'flex-start'
+        justifyContent: 'flex-start', // Align items to the top now image is back
+        textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden',
+    },
+    nodeName: {
+        fontWeight: 'bold', fontSize: '13px', // Slightly smaller?
+        marginBottom: '3px', maxWidth: '95%',
+        whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.3',
+        marginTop: '4px', // Add margin below image
+    },
+    nodeDetails: {
+        fontSize: '11px', // Slightly smaller?
+        color: '#555', marginBottom: '1px', whiteSpace: 'nowrap',
+        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '95%',
+    },
+    // --- RE-ADD Styles for Images on the card ---
+    personImage: {
+        width: '40px', // Smaller circle
+        height: '40px',
+        borderRadius: '50%',
+        objectFit: 'cover',
+        // Removed margin-bottom, handle spacing with nodeName margin-top
+        border: '1px solid #eee',
+        flexShrink: 0 // Prevent image shrinking
+    },
+    rootImage: {
+        width: 'auto', // Logo size
+        height: '40px', // Adjust logo height if needed
+        maxWidth: '90%',
+        objectFit: 'contain',
+        // Removed margin-bottom
+        flexShrink: 0
+    },
+    // --- End Image Styles ---
     indicatorCircle: { fill: "#6c757d", stroke: "#343a40", strokeWidth: "1", cursor: 'pointer' },
     actionButton: { cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.2s ease', pointerEvents: 'all' },
+    // Removed nodeDate, nodeNotes styles
 };
 
 export default GenealogyTree;
