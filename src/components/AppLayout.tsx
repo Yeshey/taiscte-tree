@@ -12,20 +12,44 @@ import Modal from './Modal';
 import PersonDetailsModal from './PersonDetailsModal';
 import * as AppStrings from '../constants/strings';
 
-// Define Props needed by the layout component
+// Define Props needed by the layout component - Updated
 interface AppLayoutProps {
-    // Data & State
-    treeData: Person[];
+    // Auth State & Handlers
     currentUser: User | null;
     authLoading: boolean;
-    firebaseStatus: 'checking' | 'config_error' | 'unavailable' | 'available';
-    dbDataStatus: 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
-    warningMessage: string | null;
+    isLoginModalOpen: boolean;
+    isSignUpModalOpen: boolean;
     verificationWarning: string | null;
     resendCooldownActive: boolean;
     resendStatusMessage: string | null;
-    isLoginModalOpen: boolean;
-    isSignUpModalOpen: boolean;
+    handleLoginClick: () => void;
+    handleLogoutClick: () => void;
+    handleSignUpClick: () => void;
+    handleCloseLoginModal: () => void;
+    handleCloseSignUpModal: () => void;
+    handleSwitchToLogin: () => void;
+    handleSwitchToSignUp: () => void;
+    handleResendVerificationEmail: () => void;
+
+    // Tree Data State & Handlers
+    treeData: Person[];
+    dbDataStatus: 'idle' | 'loading' | 'loaded' | 'empty' | 'error';
+    warningMessage: string | null; // Combined warning message
+    handleImportData: (data: Person[]) => void; // Simplified signature if async not needed by layout
+    handleExportData: () => Person[];
+    handleAddPersonClick: (padrinhoId: string) => void;
+    handleDeletePersonClick: (personId: string, personName: string) => void;
+    handleEditPersonClick: (person: Person) => void;
+    handleNodeClick: (person: Person) => void;
+
+    // Dropdown Options
+    familyNameOptions: string[];
+    naipeOptions: string[];
+    instrumentOptions: string[];
+    hierarchyOptions: string[];
+
+    // Modal State & Handlers (Managed by App, passed down)
+    firebaseStatus: 'checking' | 'config_error' | 'unavailable' | 'available';
     isPersonFormOpen: boolean;
     personToEdit: Person | null;
     editMode: 'add' | 'edit';
@@ -35,60 +59,36 @@ interface AppLayoutProps {
     genericConfirmMessage: string;
     isDetailsModalOpen: boolean;
     selectedPersonForDetails: Person | null;
-
-    // Dropdown options for PersonForm
-    familyNameOptions: string[];
-    naipeOptions: string[];
-    instrumentOptions: string[];
-    hierarchyOptions: string[];
-
-    // Callbacks & Handlers
-    handleLoginClick: () => void;
-    handleLogoutClick: () => void;
-    handleSignUpClick: () => void;
-    handleResendVerificationEmail: () => void;
-    handleImportData: (data: Person[]) => Promise<void> | void; // Match original type
-    handleExportData: () => Person[];
-    handleAddPersonClick: (padrinhoId: string) => void;
-    handleDeletePersonClick: (personId: string, personName: string) => void;
-    handleEditPersonClick: (person: Person) => void;
-    handleNodeClick: (person: Person) => void;
-    handleCloseLoginModal: () => void;
-    handleSwitchToSignUp: () => void;
-    handleCloseSignUpModal: () => void;
-    handleSwitchToLogin: () => void;
-    setIsPersonFormOpen: React.Dispatch<React.SetStateAction<boolean>>; // Allow closing form
+    setIsPersonFormOpen: React.Dispatch<React.SetStateAction<boolean>>;
     handlePersonFormSubmit: (personFormData: Omit<Person, "id" | "children" | "padrinhoId"> & { id?: string | undefined; }) => void;
     setIsDeleteConfirmOpen: React.Dispatch<React.SetStateAction<boolean>>;
     handleConfirmDelete: () => void;
     setIsGenericConfirmOpen: React.Dispatch<React.SetStateAction<boolean>>;
     handleCloseDetailsModal: () => void;
-    onGenericConfirm: (() => void) | null; // Need to pass this for generic modal
-    setPendingSubmitData: React.Dispatch<React.SetStateAction<Omit<Person, "id" | "children" | "padrinhoId"> & { id?: string | undefined; } | null>>;
+    onGenericConfirm: (() => void) | null;
+    setPendingSubmitData: React.Dispatch<React.SetStateAction<Omit<Person, "id" | "children" | "padrinhoId"> & { id?: string | undefined; } | null>>; // Adjust type if needed
     setOnGenericConfirm: React.Dispatch<React.SetStateAction<(() => void) | null>>;
 }
 
+
 const AppLayout: React.FC<AppLayoutProps> = ({
-    treeData, currentUser, authLoading, firebaseStatus, dbDataStatus,
-    warningMessage, verificationWarning, resendCooldownActive, resendStatusMessage,
-    isLoginModalOpen, isSignUpModalOpen, isPersonFormOpen, personToEdit, editMode,
-    isDeleteConfirmOpen, personToDelete, isGenericConfirmOpen, genericConfirmMessage,
-    isDetailsModalOpen, selectedPersonForDetails,
-    familyNameOptions, naipeOptions, instrumentOptions, hierarchyOptions,
-    handleLoginClick, handleLogoutClick, handleSignUpClick, handleResendVerificationEmail,
+    // Destructure all props...
+    currentUser, authLoading, isLoginModalOpen, isSignUpModalOpen, verificationWarning,
+    resendCooldownActive, resendStatusMessage, handleLoginClick, handleLogoutClick,
+    handleSignUpClick, handleCloseLoginModal, handleCloseSignUpModal, handleSwitchToLogin,
+    handleSwitchToSignUp, handleResendVerificationEmail, treeData, dbDataStatus, warningMessage,
     handleImportData, handleExportData, handleAddPersonClick, handleDeletePersonClick,
-    handleEditPersonClick, handleNodeClick, handleCloseLoginModal, handleSwitchToSignUp,
-    handleCloseSignUpModal, handleSwitchToLogin, setIsPersonFormOpen, handlePersonFormSubmit,
+    handleEditPersonClick, handleNodeClick, familyNameOptions, naipeOptions,
+    instrumentOptions, hierarchyOptions, firebaseStatus, isPersonFormOpen, personToEdit,
+    editMode, isDeleteConfirmOpen, personToDelete, isGenericConfirmOpen, genericConfirmMessage,
+    isDetailsModalOpen, selectedPersonForDetails, setIsPersonFormOpen, handlePersonFormSubmit,
     setIsDeleteConfirmOpen, handleConfirmDelete, setIsGenericConfirmOpen, handleCloseDetailsModal,
-    onGenericConfirm, setPendingSubmitData, setOnGenericConfirm
+    onGenericConfirm, setPendingSubmitData, setOnGenericConfirm // Make sure to destructure all passed props
 }) => {
 
     // Derived state for rendering
     const showTree = !(dbDataStatus === 'loading' && firebaseStatus === 'available');
     const userCanModify = !!currentUser && !!currentUser.emailVerified;
-
-    // Initializing check handled in App.tsx
-    // if (firebaseStatus === 'checking') { ... }
 
     return (
         <div className="App">
@@ -99,9 +99,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
                 <h1>Família TAISCTE</h1>
 
-                {/* Warnings */}
-                {verificationWarning && ( <div className="firebase-warning warning"> <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}> <span>{verificationWarning}</span> {currentUser && !currentUser.emailVerified && ( <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && ( <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
-                {warningMessage && !verificationWarning && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}><p style={{ whiteSpace: 'pre-line'}}>{warningMessage}</p></div> )}
+                {/* Warnings - Use combined warningMessage prop */}
+                {warningMessage && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' || verificationWarning ? 'warning' : ''}`}> <p style={{ whiteSpace: 'pre-line'}}> {warningMessage} {/* Display combined warning */} {currentUser && !currentUser.emailVerified && verificationWarning && ( /* Show resend button only if verification warning is active */ <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && verificationWarning && ( /* Show status only if verification warning active */ <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
+
 
                 <ExportImport {...{ onImport: handleImportData, onExport: handleExportData, isUserLoggedIn: !!currentUser, isFirebaseAvailable: firebaseStatus === 'available' }} />
 
@@ -110,7 +110,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 treeData.length === 0 && dbDataStatus !== 'loading' ? ( <div className="loading">Tree is empty. Add the first member.</div> ) :
                 ( <GenealogyTree
                         data={treeData}
-                        allPeople={treeData}
+                        allPeople={treeData} // Pass allPeople if needed by GenealogyTree/CustomNode directly
                         onAddPersonClick={handleAddPersonClick}
                         onDeletePersonClick={handleDeletePersonClick}
                         onEditPersonClick={handleEditPersonClick}
@@ -127,7 +127,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
             <PersonForm
                 isOpen={isPersonFormOpen}
-                onClose={() => setIsPersonFormOpen(false)} // Simple close handler
+                onClose={() => setIsPersonFormOpen(false)}
                 onSubmit={handlePersonFormSubmit}
                 initialData={personToEdit}
                 formTitle={editMode === 'edit' ? 'Edit Person' : 'Add New Afilhado'}
@@ -142,21 +142,25 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 <p>{AppStrings.CONFIRM_DELETE_MSG(personToDelete?.name || 'this person')}</p>
             </Modal>
 
-            <Modal isOpen={isGenericConfirmOpen} onClose={() => { setIsGenericConfirmOpen(false); setPendingSubmitData(null); setOnGenericConfirm(null); }} onConfirm={() => { if (onGenericConfirm) { onGenericConfirm(); } setIsGenericConfirmOpen(false); }} title="Confirm Action" confirmText="Continue" cancelText="Cancel" >
-                <p>{genericConfirmMessage}</p>
-            </Modal>
+            {/* Only render Generic Confirm Modal if needed */}
+            {isGenericConfirmOpen && (
+                 <Modal isOpen={isGenericConfirmOpen} onClose={() => { setIsGenericConfirmOpen(false); /* setPendingSubmitData(null); */ setOnGenericConfirm(null); }} onConfirm={() => { if (onGenericConfirm) { onGenericConfirm(); } setIsGenericConfirmOpen(false); }} title="Confirm Action" confirmText="Continue" cancelText="Cancel" >
+                    <p>{genericConfirmMessage}</p>
+                </Modal>
+             )}
+
 
             <PersonDetailsModal
                 isOpen={isDetailsModalOpen}
                 onClose={handleCloseDetailsModal}
                 person={selectedPersonForDetails}
-                allPeople={treeData}
+                allPeople={treeData} // Pass allPeople if needed by DetailsModal
             />
         </div>
     );
 }
 
-// Styles needed only for layout elements within AppLayout (like resend button)
+// Styles needed only for layout elements within AppLayout
 const styles: { [key: string]: React.CSSProperties } = {
     resendLinkButton: { background: 'none', border: 'none', color: '#0056b3', textDecoration: 'underline', cursor: 'pointer', padding: '0 5px', fontSize: 'inherit', marginLeft: '5px', },
 };

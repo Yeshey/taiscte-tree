@@ -53,7 +53,6 @@ const PersonForm: React.FC<PersonFormProps> = ({
             setGender(data?.gender || 'other');
             setBirthDate(data?.birthDate || '');
             setDeathDate(data?.deathDate || '');
-            setImageUrl(data?.imageUrl || 'https://i.imgur.com/0lluid3.jpeg');
             setNotes(data?.notes || '');
             setCurso(data?.curso || '');
             setNaipeVocal(data?.naipeVocal || '');
