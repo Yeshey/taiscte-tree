@@ -1,39 +1,96 @@
 // src/components/ExportImport.tsx
-import React, { useRef, useState } from 'react'; // Import useState
+import React, { useRef, useState } from 'react';
 import { saveAs } from 'file-saver';
-import { Person } from '../types/models';
-import Modal from './Modal'; // Import the generic modal
+import { Person } from '../types/models'; // Updated Person type
+import Modal from './Modal';
+// Import string constants
+import * as AppStrings from '../constants/strings';
 
-// --- Validation Function (Keep as is, ensure it's exported) ---
+// --- Validation Helper ---
 export function validateAndNormalizePersonData(data: any): { validData: Person[] | null, errors: string[] } {
-    // ... validation logic from previous step ...
-    if (!Array.isArray(data)) {
+  if (!Array.isArray(data)) {
     return { validData: null, errors: ["Imported data is not an array."] };
   }
+
   const validatedPeople: Person[] = [];
   const errors: string[] = [];
   let hasFatalError = false;
+
   data.forEach((item: any, index: number) => {
     if (typeof item !== 'object' || item === null) { errors.push(`Item at index ${index} is not a valid object.`); hasFatalError = true; return; }
+
     const person: Partial<Person> = { ...item };
+
+    // --- Check REQUIRED fields ---
     if (typeof person.id !== 'string' || !person.id) { errors.push(`Item at index ${index} (Name: ${person.name || 'N/A'}) is missing required 'id' (string).`); hasFatalError = true; }
     if (typeof person.name !== 'string' || !person.name) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) is missing required 'name' (string).`); hasFatalError = true; }
-    if (!['male', 'female', 'other'].includes(person.gender as any)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid or missing 'gender'. Defaulting to 'other'.`); person.gender = 'other';}
-    if (person.parents === undefined || person.parents === null) { person.parents = []; } else if (!Array.isArray(person.parents)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'parents' field.`); hasFatalError = true; }
-    if (person.children === undefined || person.children === null) { person.children = []; } else if (!Array.isArray(person.children)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'children' field.`); hasFatalError = true; }
-    if (person.spouses === undefined || person.spouses === null) { person.spouses = []; } else if (!Array.isArray(person.spouses)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'spouses' field.`); hasFatalError = true; }
-    if (person.notes !== undefined && typeof person.notes !== 'string') { person.notes = String(person.notes); }
-    // Add checks/defaults for new fields if necessary during import validation
-    if (person.curso !== undefined && typeof person.curso !== 'string') { person.curso = String(person.curso); }
-    if (person.vocalNaipe !== undefined && typeof person.vocalNaipe !== 'string') { person.vocalNaipe = String(person.vocalNaipe); }
-    if (person.instrumento !== undefined && typeof person.instrumento !== 'string') { person.instrumento = String(person.instrumento); }
-    if (person.subidaPalcoDate !== undefined && typeof person.subidaPalcoDate !== 'string') { person.subidaPalcoDate = String(person.subidaPalcoDate); } // Basic type check
-    if (person.passagemTunoDate !== undefined && typeof person.passagemTunoDate !== 'string') { person.passagemTunoDate = String(person.passagemTunoDate); } // Basic type check
+    if (!['male', 'female', 'other'].includes(person.gender as any)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid or missing 'gender'. Defaulting to 'other'.`); person.gender = 'other'; }
 
-    if (!errors.some(e => e.includes(`index ${index}`))) { validatedPeople.push(person as Person); } else { hasFatalError = true; }
+    // --- Check and NORMALIZE relational/optional fields ---
+    // Relationship Arrays (Only children now)
+    if (person.children === undefined || person.children === null) { person.children = []; }
+    else if (!Array.isArray(person.children)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'children' field.`); hasFatalError = true; }
+
+    // New relationship field
+    if (person.padrinhoId !== undefined && typeof person.padrinhoId !== 'string') { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'padrinhoId' field (must be string or undefined).`); person.padrinhoId = undefined; /* Or try String(person.padrinhoId) */ }
+
+    // Instruments
+    if (person.mainInstrument !== undefined && typeof person.mainInstrument !== 'string') { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'mainInstrument' field.`); person.mainInstrument = undefined; }
+    if (person.otherInstruments === undefined || person.otherInstruments === null) { person.otherInstruments = []; } // Default if missing
+    else if (!Array.isArray(person.otherInstruments)) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) has invalid 'otherInstruments' field (must be an array).`); hasFatalError = true; }
+    else { // Ensure all items in the array are strings
+        person.otherInstruments = person.otherInstruments.map(instr => String(instr)).filter(instr => typeof instr === 'string');
+    }
+
+    // Other optional strings - Ensure they are strings if present
+    const stringFields: (keyof Person)[] = ['nickname', 'notes', 'curso', 'naipeVocal', 'hierarquia'];
+    stringFields.forEach(field => {
+        // Check if the field exists and is not already a string
+        if (person[field] !== undefined && typeof person[field] !== 'string') {
+            errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) field '${field}' has invalid type (coercing to string).`);
+            // --- FIX: Cast the target via any before assigning the coerced string ---
+            (person as any)[field] = String(person[field]);
+        }
+    });
+
+    // Optional Dates - Basic type check (more validation can be added)
+    const dateFields: (keyof Person)[] = ['birthDate', 'deathDate', 'subidaPalcoDate', 'passagemTunoDate', 'dataSaidaDaTuna'];
+     dateFields.forEach(field => {
+        if (person[field] !== undefined && typeof person[field] !== 'string') {
+             errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) field '${field}' has invalid type.`);
+             person[field] = undefined; // Remove invalid date type
+        }
+        // Optional: Add regex check for YYYY-MM-DD format
+        // else if (person[field] && !/^\d{4}-\d{2}-\d{2}$/.test(person[field] as string)) {
+        //    errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) field '${field}' has invalid date format (YYYY-MM-DD).`);
+        //    person[field] = undefined;
+        // }
+     });
+
+
+    // Ensure imageUrl is string if present
+     if (person.imageUrl !== undefined && typeof person.imageUrl !== 'string') { person.imageUrl = undefined; }
+
+
+    // Check for removed fields and log warning if they exist
+    if ((item as any).parents !== undefined) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) contains removed field 'parents'. It will be ignored.`); }
+    if ((item as any).spouses !== undefined) { errors.push(`Item at index ${index} (ID: ${person.id || 'N/A'}) contains removed field 'spouses'. It will be ignored.`); }
+
+    // Only add if no fatal errors occurred *for this item*
+    if (!errors.some(e => e.includes(`index ${index}`))) {
+        // Remove ignored fields explicitly before casting
+        delete (person as any).parents;
+        delete (person as any).spouses;
+        validatedPeople.push(person as Person);
+    } else {
+         hasFatalError = true;
+    }
   });
-  if (errors.length > 0) { console.error("Import Validation Errors:", errors); }
-  return { validData: hasFatalError ? null : validatedPeople, errors };
+
+  if (errors.length > 0) { console.warn("Import Validation Issues:", errors); } // Use warn for non-fatal
+
+  // Return null only if fatal errors occurred (missing id, name, wrong array types)
+  return { validData: hasFatalError ? null : validatedPeople, errors: errors.filter(e => !e.includes('contains removed field') && !e.includes('defaulting')) }; // Filter out non-critical warnings for user alert
 }
 // --- End Validation Helper ---
 
@@ -57,124 +114,82 @@ const ExportImport: React.FC<ExportImportProps> = ({
   // --- End State ---
 
   const handleExport = () => {
-    const data = onExport();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    saveAs(blob, 'family-tree.json'); // Export only JSON with Imgur URLs
-  };
+        const data = onExport();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        saveAs(blob, 'tuna-tree.json'); // Changed filename
+    };
 
-  const handleImportClick = () => {
-    if (!isFirebaseAvailable) {
-        alert("Import disabled: Firebase connection unavailable.");
-        return;
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // --- Check if ZIP (and reject for now, as we use Imgur) ---
-    if (file.type === 'application/zip' || file.name.endsWith('.zip')) {
-        alert("ZIP file import is not supported when using external image URLs (like Imgur). Please import the JSON file directly.");
-         if (fileInputRef.current) { fileInputRef.current.value = ''; } // Reset input
-        return;
-    }
-    // --- End ZIP Check ---
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const jsonData = JSON.parse(e.target?.result as string);
-        const { validData, errors } = validateAndNormalizePersonData(jsonData);
-
-        if (validData) {
-          // --- Data is valid, store it and open confirmation modal ---
-          setDataToImport(validData);
-          setIsConfirmModalOpen(true);
-          // --- Don't call onImport directly here ---
-        } else {
-          alert(`Import failed due to invalid data format:\n- ${errors.join('\n- ')}\nPlease check the file structure or console for details.`);
-        }
-
-      } catch (error) {
-        console.error("Error processing JSON file:", error);
-        alert('Error parsing JSON file: ' + error);
+    // --- Import Click (remains the same) ---
+    const handleImportClick = () => {
+      if (!isFirebaseAvailable) {
+          alert("Import disabled: Firebase connection unavailable.");
+          return;
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
       }
     };
-    reader.readAsText(file);
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+    // --- File Change Handler (uses validation) ---
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (file.type === 'application/zip' || file.name.endsWith('.zip')) {
+            alert(AppStrings.IMPORT_ZIP_UNSUPPORTED);
+            if (fileInputRef.current) { fileInputRef.current.value = ''; }
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const jsonData = JSON.parse(e.target?.result as string);
+                const { validData, errors } = validateAndNormalizePersonData(jsonData); // Use the updated validator
 
-  // --- Confirmation Handler ---
-  const handleConfirmImport = () => {
-    if (dataToImport) {
-      onImport(dataToImport); // Call the original onImport passed from App
-    }
-    setIsConfirmModalOpen(false);
-    setDataToImport(null);
-  };
-  // --- End Confirmation Handler ---
+                if (validData) {
+                    setDataToImport(validData);
+                    setIsConfirmModalOpen(true); // Open confirm modal
+                } else {
+                    alert(AppStrings.IMPORT_FAILED_INVALID(errors));
+                }
+            } catch (error) {
+                console.error("Error processing JSON file:", error);
+                alert('Error parsing JSON file: ' + error);
+            }
+        };
+        reader.readAsText(file);
+        if (fileInputRef.current) { fileInputRef.current.value = ''; }
+    };
 
-  const importDisabled = !isFirebaseAvailable;
-  const importTitle = importDisabled
-    ? "Import disabled: Firebase connection unavailable."
-    : isUserLoggedIn
-    ? "Import JSON tree data (will OVERWRITE shared tree)"
-    : "Import JSON tree data (view locally, log in to save)";
+    // --- Confirm Import (remains the same) ---
+    const handleConfirmImport = () => {
+        if (dataToImport) { onImport(dataToImport); }
+        setIsConfirmModalOpen(false); setDataToImport(null);
+    };
 
-  return (
-    <> {/* Use Fragment to render modal alongside buttons */}
-      <div className="export-import-container">
-        <button
-          className="export-import-button"
-          onClick={handleExport}
-          title="Export current tree view to a JSON file"
-        >
-          Export Tree
-        </button>
+    // --- JSX (Use AppStrings) ---
+    const importDisabled = !isFirebaseAvailable;
+    const importTitle = importDisabled ? "Import disabled: Firebase connection unavailable." : isUserLoggedIn ? "Import JSON tree data (will OVERWRITE shared tree)" : "Import JSON tree data (view locally, log in to save)";
 
-        <input
-          type="file"
-          accept=".json" // Accept only JSON now
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="file-input"
-          disabled={importDisabled}
-        />
-        <label
-          className={`file-input-label ${importDisabled ? 'disabled' : ''}`}
-          onClick={handleImportClick}
-          title={importTitle}
-          style={importDisabled ? { cursor: 'not-allowed', backgroundColor: '#ccc' } : {}}
-        >
-          Import Tree {!isUserLoggedIn && isFirebaseAvailable && '(Local View)'}
-        </label>
-      </div>
-
-      {/* --- Render Confirmation Modal --- */}
-      <Modal
-        isOpen={isConfirmModalOpen}
-        onClose={() => { setIsConfirmModalOpen(false); setDataToImport(null); }}
-        onConfirm={handleConfirmImport}
-        title="Confirm Import & Overwrite"
-        confirmText="Overwrite"
-        cancelText="Cancel"
-      >
-        <p>Importing this file will <strong style={{color: 'red'}}>overwrite the current tree data in the shared database</strong>.</p>
-        <p>This action is irreversible.</p>
-        <p>Are you sure you want to continue?</p>
-        {/* Add note if user is not logged in */}
-        {!isUserLoggedIn && <p style={{marginTop: '10px', fontStyle: 'italic', color: '#666'}}>(Note: You are not logged in. This import will only affect your local view unless you log in and save.)</p>}
-      </Modal>
-      {/* --- End Modal --- */}
-    </>
-  );
+    return (
+        <>
+            <div className="export-import-container">
+                {/* ... buttons using importTitle ... */}
+                <button className="export-import-button" onClick={handleExport} title="Export current tree view to a JSON file"> Export Tree </button>
+                <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileChange} className="file-input" disabled={importDisabled} />
+                <label className={`file-input-label ${importDisabled ? 'disabled' : ''}`} onClick={handleImportClick} title={importTitle} style={importDisabled ? { cursor: 'not-allowed', backgroundColor: '#ccc' } : {}}> Import Tree {!isUserLoggedIn && isFirebaseAvailable && '(Local View)'} </label>
+            </div>
+            <Modal
+                isOpen={isConfirmModalOpen}
+                onClose={() => { setIsConfirmModalOpen(false); setDataToImport(null); }}
+                onConfirm={handleConfirmImport}
+                title={AppStrings.CONFIRM_IMPORT_OVERWRITE_TITLE}
+                confirmText="Overwrite" cancelText="Cancel"
+            >
+                <p dangerouslySetInnerHTML={{ __html: AppStrings.CONFIRM_IMPORT_OVERWRITE_MSG.replace('<strong style={{color: \'red\'}}>', '<strong>').replace('</strong>', '</strong>') }}></p>
+                {!isUserLoggedIn && <p style={{marginTop: '10px', fontStyle: 'italic', color: '#666'}}>{AppStrings.CONFIRM_IMPORT_LOCAL_NOTE}</p>}
+            </Modal>
+        </>
+    );
 };
 
 export default ExportImport;
