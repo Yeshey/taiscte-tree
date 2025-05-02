@@ -1,16 +1,16 @@
 {
   "files": {
     "main.css": "/taiscte-tree/static/css/main.cb3cf5db.css",
-    "main.js": "/taiscte-tree/static/js/main.73be4f64.js",
+    "main.js": "/taiscte-tree/static/js/main.1de03948.js",
     "static/js/453.edc83f8b.chunk.js": "/taiscte-tree/static/js/453.edc83f8b.chunk.js",
     "static/media/TAISCTE_logo.png": "/taiscte-tree/static/media/TAISCTE_logo.1ddd6a0f61ad1c86b230.png",
     "index.html": "/taiscte-tree/index.html",
     "main.cb3cf5db.css.map": "/taiscte-tree/static/css/main.cb3cf5db.css.map",
-    "main.73be4f64.js.map": "/taiscte-tree/static/js/main.73be4f64.js.map",
+    "main.1de03948.js.map": "/taiscte-tree/static/js/main.1de03948.js.map",
     "453.edc83f8b.chunk.js.map": "/taiscte-tree/static/js/453.edc83f8b.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.cb3cf5db.css",
-    "static/js/main.73be4f64.js"
+    "static/js/main.1de03948.js"
   ]
 }
