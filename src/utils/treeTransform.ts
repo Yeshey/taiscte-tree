@@ -6,7 +6,7 @@ import TaiscteLogo from '../assets/TAISCTE_logo.png';
 export interface TreeNode {
     name: string;
     // Keep attributes similar, ensure parentId is there if needed for debugging
-    attributes: Partial<Person> & { id: string; name: string; gender: string; familyName?: string; parentId?: string };
+    attributes: Partial<Person> & { id: string; name: string; gender: string; familyName?: string; parentId?: string; imageUrl?: string }; // Added imageUrl to attributes type
     children?: TreeNode[]; // This array is BUILT during transformation
     // Internal properties added by react-d3-tree
     __rd3t?: {
@@ -24,19 +24,33 @@ export function generateHslColor(hue: number): string {
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
-// --- Tree Transformation Logic - REWRITTEN ---
+// --- Tree Transformation Logic - MODIFIED ---
 
 export const transformTunaDataForTree = (people: Person[]): TreeNode => {
+    // Create the artificial root first. It will always be returned.
+    const artificialRoot: TreeNode = {
+        name: 'TAISCTE',
+        attributes: { id: 'root', name: 'TAISCTE', gender: 'other', imageUrl: TaiscteLogo },
+        children: [], // Initialize children, will be populated
+    };
+
+    // Handle empty or invalid input data gracefully
     if (!people || people.length === 0) {
-         return { name: 'No Data', attributes: { id: 'no_data', name: 'No Data', gender: 'other' } };
+        console.log("No person data provided, returning only the artificial root.");
+        return artificialRoot;
     }
 
     const peopleMap = new Map(people.map(p => [p.id, p]));
     const nodesMap = new Map<string, TreeNode>();
-    const rootNodes: TreeNode[] = [];
+    const rootNodes: TreeNode[] = []; // Nodes from data that don't have a parentId
 
     // 1. Create a TreeNode for each person and store it in a map
     people.forEach(person => {
+        // Basic check for essential fields to avoid errors later
+        if (!person.id || !person.name || !person.gender) {
+            console.warn(`Skipping person with missing essential data: ${JSON.stringify(person)}`);
+            return;
+        }
         const treeNode: TreeNode = {
             name: person.name,
             attributes: {
@@ -45,7 +59,8 @@ export const transformTunaDataForTree = (people: Person[]): TreeNode => {
                 name: person.name,
                 gender: person.gender,
                 familyName: person.familyName,
-                parentId: person.parentId // Keep parentId in attributes if helpful
+                parentId: person.parentId, // Keep parentId in attributes if helpful
+                imageUrl: person.imageUrl // Ensure imageUrl is included
             },
             children: [] // Initialize children array - this will be populated
         };
@@ -67,25 +82,26 @@ export const transformTunaDataForTree = (people: Person[]): TreeNode => {
                 rootNodes.push(node);
             }
         } else {
-            // No parentId means it's a root node
+            // No parentId means it's a root node relative to the data
             rootNodes.push(node);
         }
     });
 
-    // 3. Determine final structure (single root or artificial root)
-    if (rootNodes.length === 0 && nodesMap.size > 0) {
-        // Should not happen if data is consistent, but handle cyclic data case
-        console.error("Circular dependency detected or no root nodes found! Returning all nodes under artificial root.");
-        return { name: 'TAISCTE (Error)', attributes: { id: 'error_root', name: 'TAISCTE (Error)', gender: 'other', imageUrl: TaiscteLogo }, children: Array.from(nodesMap.values()) };
-    } else if (rootNodes.length === 1) {
-        // Single root node - this is the tree
-        return rootNodes[0];
-    } else {
-        // Multiple root nodes - create an artificial root
-        console.log(`Found ${rootNodes.length} root nodes. Creating artificial TAISCTE root.`);
-        return { name: 'TAISCTE', attributes: { id: 'root', name: 'TAISCTE', gender: 'other', imageUrl: TaiscteLogo }, children: rootNodes };
-    }
-};
+    // 3. Attach all identified root nodes from the data to the artificial root's children
+    artificialRoot.children = rootNodes;
 
-// buildTunaTree function is no longer needed with this approach
-// export const buildTunaTree = (...) => { ... };
+    // 4. Always return the artificial root
+    if (rootNodes.length === 0 && nodesMap.size > 0) {
+        // This might indicate an issue like circular dependencies if nodes exist but none are roots.
+        // Still return the artificial root, but maybe log a more specific error.
+        console.error("No root nodes found in the provided data, but nodes exist. Check for circular dependencies or data issues. Attaching all nodes under artificial root.");
+        artificialRoot.children = Array.from(nodesMap.values()); // Attach all nodes as a fallback
+    } else if (rootNodes.length > 1) {
+         console.log(`Found ${rootNodes.length} root members. Displaying under main TAISCTE node.`);
+    } else if (rootNodes.length === 1) {
+         console.log(`Found single root member. Displaying under main TAISCTE node.`);
+    } // Case of 0 rootNodes and 0 nodesMap size is handled by the initial empty check.
+
+
+    return artificialRoot;
+};

@@ -33,14 +33,14 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
 
     // Effect for centering (no change)
     React.useEffect(() => {
-        if (treeDataProp.length > 0) {
-            const treeContainer = document.querySelector('.tree-container');
-            if (treeContainer) {
-                const { width, height } = treeContainer.getBoundingClientRect();
-                setTranslate({ x: width / 2, y: height / 4 });
-            }
+        // Center the view when the component mounts or data changes significantly
+        const treeContainer = document.querySelector('.tree-container');
+        if (treeContainer) {
+            const { width, height } = treeContainer.getBoundingClientRect();
+            // Adjust initial centering based on whether it's the artificial root
+            setTranslate({ x: width / 2, y: height / 4 });
         }
-    }, [treeDataProp]);
+    }, [treeDataProp]); // Trigger centering based on prop change
 
     // Memoized color map (no change)
     const familyColorMap = useMemo(() => {
@@ -81,28 +81,34 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
     const totalNodeHeight = cardHeight + bottomSpacing;
 
     // Simplified Render Function - Delegates to CustomNode
-    const renderCustomNodeElement: RenderCustomNodeElementFn = ({ nodeDatum }) => {
+    const renderCustomNodeElement: RenderCustomNodeElementFn = ({ nodeDatum, toggleNode }) => { // Added toggleNode for potential future use
         // Extract necessary data and calculate props for CustomNode
         const nodeAttributes = nodeDatum.attributes as TreeNode['attributes'] | undefined;
-        const personData = (nodeAttributes?.id && nodeAttributes?.name) ? nodeAttributes as unknown as Person : undefined;
+        const personData = (nodeAttributes?.id && nodeAttributes?.name && nodeAttributes.id !== 'root' && nodeAttributes.id !== 'no_data' && nodeAttributes.id !== 'error_root') ? nodeAttributes as unknown as Person : undefined;
         const familyName = personData?.familyName;
         const familyColor = familyName ? familyColorMap.get(familyName) : undefined;
-        const isArtificialRoot = ['root', 'artificial_root', 'no_data', 'error'].includes(nodeAttributes?.id as string);
+        // Check if it's the artificial root (ID 'root') or other non-person nodes
+        const isArtificialRoot = nodeAttributes?.id === 'root';
+        const isNonPersonNode = ['no_data', 'error_root'].includes(nodeAttributes?.id as string) || isArtificialRoot;
+
 
         // Determine permissions based on login status and node type
         const hasAfilhados = !!nodeDatum.children?.length;
         const hasManuallyHiddenAfilhados = !!(nodeDatum as any)?._children?.length; // Check if manually collapsed
         const isLeafNode = !hasAfilhados && !hasManuallyHiddenAfilhados; // Consider collapsed nodes as non-leaf for deletion
-        const canDelete = isUserLoggedIn && isLeafNode && !isArtificialRoot;
-        const canAdd = isUserLoggedIn && !isArtificialRoot;
-        const canEdit = isUserLoggedIn && !isArtificialRoot;
+
+        // Permissions Logic:
+        const canEdit = isUserLoggedIn && !isNonPersonNode && !!personData; // Can edit only real people
+        const canDelete = isUserLoggedIn && !isNonPersonNode && !!personData && isLeafNode; // Can delete only real leaf people
+        // *** MODIFIED: Allow add button on the artificial root ***
+        const canAdd = isUserLoggedIn; // Add button can appear on ANY node if logged in
 
         return (
             <CustomNode
                 nodeDatum={nodeDatum}
-                personData={personData}
+                personData={personData} // Will be undefined for artificial root
                 familyColor={familyColor}
-                isArtificialRoot={isArtificialRoot}
+                isArtificialRoot={isArtificialRoot} // Pass specifically if it's the main 'root' node
                 canAdd={canAdd}
                 canEdit={canEdit}
                 canDelete={canDelete}
@@ -112,20 +118,21 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                 onAddPersonClick={onAddPersonClick}
                 onDeletePersonClick={onDeletePersonClick}
                 onEditPersonClick={onEditPersonClick}
+                // toggleNode={toggleNode} // Pass if CustomNode needs to handle collapse/expand
             />
         );
     };
 
-    // Loading/Empty checks (no change)
-    if (!treeDataProp || treeDataProp.length === 0) { return <div className="loading">Loading tree data or tree is empty...</div>; }
-    if (!treeData || ['No Data', 'Error'].includes(treeData.name)) { return <div>{treeData.attributes?.name || 'Could not generate tree structure.'}</div>; }
+    // Loading/Empty checks (no change) - transform function handles empty data now
+    // if (!treeDataProp || treeDataProp.length === 0) { return <div className="loading">Loading tree data or tree is empty...</div>; }
+    // if (!treeData || ['No Data', 'Error'].includes(treeData.name)) { return <div>{treeData.attributes?.name || 'Could not generate tree structure.'}</div>; }
 
     // Main return with Tree component (no change in structure)
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
              <div className="zoom-controls"> <button className="zoom-button" onClick={handleZoomIn}>+</button> <button className="zoom-button" onClick={handleZoomOut}>-</button> </div>
             <Tree
-                data={treeData as unknown as RawNodeDatum}
+                data={treeData as unknown as RawNodeDatum} // Data is now always the artificial root structure
                 orientation="vertical"
                 translate={translate} zoom={zoom} onUpdate={handleUpdate}
                 zoomable={true} scaleExtent={{ min: minZoom, max: maxZoom }}
@@ -133,11 +140,12 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                 nodeSize={{ x: cardWidth + 20, y: totalNodeHeight }}
                 separation={{ siblings: 1.0, nonSiblings: 1.2 }}
                 pathFunc="step"
-                collapsible={false} // Keep collapsing disabled on Tree level
-                transitionDuration={0}
+                // collapsible={true} // Enable if you want expand/collapse behavior
+                // initialDepth={1} // Optionally start with only the first level visible
+                transitionDuration={0} // Set to 0 for faster updates, or e.g. 300 for animations
             />
         </div>
     );
 };
 
-export default GenealogyTree; // Styles object is removed as it's now in CustomNode
+export default GenealogyTree;

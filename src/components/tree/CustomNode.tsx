@@ -9,25 +9,26 @@ const placeholderImageUrl = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL
 
 interface CustomNodeProps {
     nodeDatum: TreeNodeDatum;
-    personData?: Person; // Extracted person data
+    personData?: Person; // Extracted person data (will be undefined for artificial root)
     familyColor?: string; // Calculated color
-    isArtificialRoot: boolean;
+    isArtificialRoot: boolean; // Explicitly know if it's the main 'root' node
     canAdd: boolean;
     canEdit: boolean;
     canDelete: boolean;
     cardWidth: number;
     cardHeight: number;
     onNodeClick: (person: Person) => void;
-    onAddPersonClick: (padrinhoId: string) => void;
+    onAddPersonClick: (targetNodeId: string) => void; // Use targetNodeId for clarity
     onDeletePersonClick: (personId: string, personName: string) => void;
     onEditPersonClick: (person: Person) => void;
+    // toggleNode: () => void; // Add if needed for collapse/expand
 }
 
 const CustomNode: React.FC<CustomNodeProps> = ({
     nodeDatum,
     personData,
     familyColor,
-    isArtificialRoot,
+    isArtificialRoot, // Use this prop
     canAdd,
     canEdit,
     canDelete,
@@ -37,72 +38,111 @@ const CustomNode: React.FC<CustomNodeProps> = ({
     onAddPersonClick,
     onDeletePersonClick,
     onEditPersonClick,
+    // toggleNode, // Destructure if used
 }) => {
 
-    const imageUrl = typeof personData?.imageUrl === 'string' && personData.imageUrl ? personData.imageUrl : placeholderImageUrl;
-    const nodeName = personData?.name || nodeDatum.name || 'Unknown';
-    const displayName = personData?.nickname ? `${personData.name} "${personData.nickname}"` : personData?.name || nodeName;
+    // Use attributes from nodeDatum for artificial root display
+    const nodeAttributes = nodeDatum.attributes as any; // Cast for easier access
+    const imageUrl = isArtificialRoot
+        ? nodeAttributes?.imageUrl || placeholderImageUrl
+        : personData?.imageUrl || placeholderImageUrl;
+    const nodeName = isArtificialRoot
+        ? nodeAttributes?.name || 'TAISCTE'
+        : personData?.name || 'Unknown';
+    const displayName = personData?.nickname ? `${personData.name} "${personData.nickname}"` : nodeName;
     const familyName = personData?.familyName;
 
     const nodeCardStyle = {
         ...styles.nodeCard,
-        ...(familyColor && !isArtificialRoot && {
+        ...(familyColor && !isArtificialRoot && { // Apply color only to actual people
             borderLeft: `6px solid ${familyColor}`,
         }),
-    };
-
-    const formatDate = (dateStr: string | undefined, format: 'year' | 'month' | 'day') => {
-        if (!dateStr || typeof dateStr !== 'string') return '';
-        try {
-            const date = new Date(dateStr + 'T00:00:00');
-            if (isNaN(date.getTime())) return `Invalid Date: ${dateStr}`;
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            if (format === 'year') return year.toString();
-            if (format === 'month') return `${month}/${year}`;
-            if (format === 'day') return `${day}/${month}/${year}`;
-        } catch (e) { return `Format Error: ${dateStr}`; }
-        return dateStr;
     };
 
     // --- Button Positioning ---
     const cardX = -cardWidth / 2; const cardY = -cardHeight / 2;
     const buttonSize = 16;
-    const buttonOffsetY = cardY + cardHeight + 1;
+    const buttonOffsetY = cardY + cardHeight + 1; // Vertical position below the card
     const buttonSpacing = 8;
+
+    // Determine which buttons are ACTUALLY visible based on props
     const visibleButtons: ('edit' | 'delete' | 'add')[] = [];
-    if (canEdit && personData) visibleButtons.push('edit');
-    if (canDelete) visibleButtons.push('delete');
-    if (canAdd) visibleButtons.push('add');
+    if (canEdit && personData) visibleButtons.push('edit'); // Edit only on real people
+    if (canDelete && personData) visibleButtons.push('delete'); // Delete only on real people
+    if (canAdd) visibleButtons.push('add'); // Add can appear on any node (including root)
+
     const visibleButtonCount = visibleButtons.length;
     const totalButtonsWidth = (visibleButtonCount * buttonSize) + (Math.max(0, visibleButtonCount - 1) * buttonSpacing);
-    const startX = -totalButtonsWidth / 2;
-    const getButtonPosition = (type: 'edit' | 'delete' | 'add'): number | null => {
+    const startX = -totalButtonsWidth / 2; // Center the group of buttons horizontally
+
+    const getButtonPositionX = (type: 'edit' | 'delete' | 'add'): number | null => {
         const index = visibleButtons.indexOf(type);
         if (index === -1) return null;
         return startX + (index * (buttonSize + buttonSpacing));
     };
-    const editButtonX = getButtonPosition('edit');
-    const deleteButtonX = getButtonPosition('delete');
-    const addButtonX = getButtonPosition('add');
+
+    const editButtonX = getButtonPositionX('edit');
+    const deleteButtonX = getButtonPositionX('delete');
+    let addButtonX = getButtonPositionX('add'); // Use let to allow modification
+
+    // *** ADDED: Adjust Add button position specifically for the root node ***
+    const rootButtonOffset = -10; // Shift 10 pixels to the left for the root
+    if (isArtificialRoot && addButtonX !== null) {
+        addButtonX += rootButtonOffset;
+    }
+    // *** END ADJUSTMENT ***
+
 
     // --- Handlers ---
     const handleNodeCardClick = (event: React.MouseEvent) => {
         event.stopPropagation();
-        if (personData && !isArtificialRoot) {
+        if (personData && !isArtificialRoot) { // Only trigger details for actual people
             onNodeClick(personData);
         }
+        // Optional: Add expand/collapse logic if needed
+        // else if (!isArtificialRoot && toggleNode) { // Allow collapsing real nodes
+        //     toggleNode();
+        // }
     };
+
+    const handleAddClick = (event: React.MouseEvent) => {
+        event.stopPropagation();
+        const targetNodeId = isArtificialRoot ? 'root' : personData?.id;
+        if (targetNodeId) {
+            onAddPersonClick(targetNodeId);
+        } else {
+            console.error("Cannot add: Node identifier is missing.");
+        }
+    };
+
+    const handleEditClick = (event: React.MouseEvent) => {
+        event.stopPropagation();
+        if (personData && canEdit) {
+            onEditPersonClick(personData);
+        }
+    };
+
+    const handleDeleteClick = (event: React.MouseEvent) => {
+        event.stopPropagation();
+        if (personData && canDelete) {
+            onDeletePersonClick(personData.id, personData.name || 'this person');
+        }
+    };
+
 
     return (
         <g onClick={handleNodeCardClick} style={{ cursor: isArtificialRoot ? 'default' : 'pointer' }}>
             <foreignObject width={cardWidth} height={cardHeight} x={cardX} y={cardY}>
                 <div style={nodeCardStyle}>
                     <img src={imageUrl} alt={nodeName} style={isArtificialRoot ? styles.rootImage : styles.personImage} onError={(e) => { const t=e.target as HTMLImageElement; if(t.src!==placeholderImageUrl) t.src=placeholderImageUrl; }}/>
-                    {!isArtificialRoot && (
+
+                    {/* Display name differently for root vs person */}
+                    {isArtificialRoot ? (
+                         <div style={{...styles.nodeName, marginTop: '10px', fontWeight: 'bold'}}>{nodeName}</div>
+                    ) : (
                          <div style={styles.nodeName} title={displayName}>{displayName}</div>
                     )}
+
                     {!isArtificialRoot && personData && (
                          <div style={{...styles.nodeDetails, fontSize: '10px', fontStyle: 'italic'}}>Família {familyName || '?'}</div>
                     )}
@@ -113,20 +153,37 @@ const CustomNode: React.FC<CustomNodeProps> = ({
                             <div style={styles.nodeDetails}>{personData.mainInstrument || '-'}</div>
                         </>
                     )}
-                    {isArtificialRoot && <div style={{marginTop: '10px', fontWeight: 'bold'}}>{nodeName}</div>}
                 </div>
             </foreignObject>
 
-             {/* Action Buttons */}
-             {canEdit && personData && editButtonX !== null && ( <g transform={`translate(${editButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onEditPersonClick(personData); }} className="node-action-button" style={styles.actionButton}> <Edit size={buttonSize} color="#ffc107"/> </g> )}
-             {canDelete && deleteButtonX !== null && ( <g transform={`translate(${deleteButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onDeletePersonClick(personData?.id || '', nodeName); }} className="node-action-button" style={styles.actionButton}> <MinusCircle size={buttonSize} color="#dc3545"/> </g> )}
-             {canAdd && addButtonX !== null && ( <g transform={`translate(${addButtonX}, ${buttonOffsetY})`} onClick={(e) => { e.stopPropagation(); onAddPersonClick(personData?.id || ''); }} className="node-action-button" style={styles.actionButton}> <PlusCircle size={buttonSize} color="#28a745"/> </g> )}
+             {/* Action Buttons - Render based on calculated positions */}
+             {/* Edit Button */}
+             {canEdit && personData && editButtonX !== null && (
+                 <g transform={`translate(${editButtonX}, ${buttonOffsetY})`} onClick={handleEditClick} className="node-action-button" style={styles.actionButton}>
+                     <title>Edit {personData.name}</title>
+                     <Edit size={buttonSize} color="#ffc107"/>
+                 </g>
+             )}
+             {/* Delete Button */}
+             {canDelete && personData && deleteButtonX !== null && (
+                 <g transform={`translate(${deleteButtonX}, ${buttonOffsetY})`} onClick={handleDeleteClick} className="node-action-button" style={styles.actionButton}>
+                     <title>Delete {personData.name}</title>
+                     <MinusCircle size={buttonSize} color="#dc3545"/>
+                 </g>
+             )}
+             {/* Add Button - Use the potentially adjusted addButtonX */}
+             {canAdd && addButtonX !== null && (
+                 <g transform={`translate(${addButtonX}, ${buttonOffsetY})`} onClick={handleAddClick} className="node-action-button" style={styles.actionButton}>
+                     <title>Add Afilhado {isArtificialRoot ? 'to TAISCTE' : `to ${nodeName}`}</title>
+                     <PlusCircle size={buttonSize} color="#28a745"/>
+                 </g>
+             )}
         </g>
     );
 };
 
 
-// --- Styles (Copied subset from GenealogyTree) ---
+// --- Styles (No changes needed here) ---
 const styles: { [key: string]: React.CSSProperties } = {
     nodeCard: {
         border: '1px solid #ccc',
@@ -136,9 +193,9 @@ const styles: { [key: string]: React.CSSProperties } = {
         boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-start',
+        justifyContent: 'flex-start', // Aligned content to top
         textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden',
-        paddingLeft: '5px',
+        paddingLeft: '5px', // Compensate for border-left potential width
     },
     nodeName: {
         fontWeight: 'bold', fontSize: '13px',
@@ -157,22 +214,25 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: '50%',
         objectFit: 'cover',
         border: '1px solid #eee',
-        flexShrink: 0
+        flexShrink: 0, // Prevent image shrinking
+        marginTop: '5px', // Add some top margin
     },
-    rootImage: {
-        width: 'auto',
-        height: '40px',
-        maxWidth: '90%',
-        objectFit: 'contain',
+    rootImage: { // Style specifically for the root logo/image
+        width: 'auto', // Let aspect ratio determine width
+        height: '45px', // Slightly larger for root
+        maxWidth: '80%', // Limit width within card
+        objectFit: 'contain', // Ensure logo isn't distorted
         flexShrink: 0,
-        marginBottom: '5px',
+        marginBottom: '5px', // Space below logo
+        marginTop: '5px',
     },
     actionButton: {
         cursor: 'pointer',
         opacity: 0.6,
         transition: 'opacity 0.2s ease-in-out',
-        pointerEvents: 'all'
+        pointerEvents: 'all' // Ensure clicks are registered
     },
+    // actionButton hover is handled by CSS: .node-action-button:hover { opacity: 1; }
 };
 
 export default CustomNode;
