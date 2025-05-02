@@ -1,4 +1,6 @@
 // src/constants/strings.ts
+// --- START OF FILE src/constants/strings.ts ---
+// src/constants/strings.ts
 
 // --- Hierarchy ---
 // Define base levels with internal keys and default display names
@@ -29,7 +31,8 @@ export const PROMPT_TUNO_UPGRADE_MESSAGE = (name: string) => `${name} has been '
 export const PROMPT_TUNO_UPGRADE_BUTTON = "Edit Person";
 
 // Forms & General
-export const ERROR_NAME_GENDER_REQUIRED = "Name and Gender are required fields.";
+export const ERROR_NAME_GENDER_FAMILYNAME_REQUIRED = "Name, Gender, and Family Name are required fields."; // Updated error message
+export const PROMPT_ADD_NEW_FAMILY_NAME = "Enter the new Family Name:"; // Added prompt
 export const PROMPT_ADD_NEW_NAIPE = "Enter the new Naipe Vocal:";
 export const PROMPT_ADD_NEW_INSTRUMENT = "Enter the new Instrument name:";
 export const PROMPT_ADD_NEW_HIERARCHY = "Enter the name for the new Hierarchy level:";
@@ -73,3 +76,4 @@ export const FIREBASE_FETCH_PERMISSION_ERROR = "Error fetching data: Permission 
 export const FIREBASE_DATA_ERROR = (errors: string) => `Data error in Firebase: ${errors}. Displaying demo data.`;
 export const FIREBASE_DATA_EMPTY_ARRAY = "Firebase connection successful. No tree members found yet. Displaying demo.";
 export const FIREBASE_DATA_EMPTY_NODE = "Firebase connection successful, but no tree data found. Displaying demo data.";
+// --- END OF FILE src/constants/strings.ts ---

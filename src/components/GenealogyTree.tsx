@@ -229,6 +229,7 @@ const GenealogyTree: React.FC<GenealogyTreeProps> = ({
                     }</div>
                         {!isArtificialRoot && personData && (
                             <>
+                                <div style={{ ...styles.nodeDetails, color: 'red' }}>Família {personData.familyName || '-'}</div>
                                 <div style={styles.nodeDetails}>{personData.hierarquia || '-'}</div>
                                 <div style={styles.nodeDetails}>{personData.naipeVocal || '-'}</div>
                                 <div style={styles.nodeDetails}>{personData.mainInstrument || '-'}</div>

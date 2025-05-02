@@ -1,4 +1,5 @@
 // src/App.tsx
+// --- START OF RELEVANT App.tsx SECTION ---
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './App.css';
 import GenealogyTree from './components/GenealogyTree';
@@ -28,7 +29,6 @@ const isDateOlderThanYears = (dateStr: string | undefined, years: number): boole
       if (isNaN(date.getTime())) return false;
       const thresholdDate = new Date();
       thresholdDate.setFullYear(thresholdDate.getFullYear() - years);
-      // Optional: Compare only year and month if needed, but direct compare is fine
       return date < thresholdDate;
   } catch {
       return false;
@@ -36,13 +36,17 @@ const isDateOlderThanYears = (dateStr: string | undefined, years: number): boole
 };
 
 // --- Validate demo data on initial load ---
-const initialValidatedDemoData = validateAndNormalizePersonData(demoData).validData || [];
+const { validData: initialValidatedDemoData, errors: demoErrors } = validateAndNormalizePersonData(demoData);
+if (!initialValidatedDemoData) {
+    console.error("FATAL: Demo data is invalid!", demoErrors);
+    // Handle this critical error, maybe show an error message instead of the app
+}
 
 function App() {
   // --- Initialize treeData with validated demo data ---
-  const [treeData, setTreeData] = useState<Person[]>(initialValidatedDemoData);
+  const [treeData, setTreeData] = useState<Person[]>(initialValidatedDemoData || []); // Fallback to empty array if demo is somehow invalid
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true); // Still track auth check
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState<boolean>(false);
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('checking');
@@ -53,64 +57,85 @@ function App() {
   const [resendStatusMessage, setResendStatusMessage] = useState<string | null>(null);
   const [isPersonFormOpen, setIsPersonFormOpen] = useState(false);
   const [personToEdit, setPersonToEdit] = useState<Person | null>(null);
-  const [parentForNewPersonId, setParentForNewPersonId] = useState<string | null>(null);
+  const [parentForNewPersonId, setParentForNewPersonId] = useState<string | null>(null); // ID of the person under whom we are adding
   const [editMode, setEditMode] = useState<EditMode>('add');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<{ id: string, name: string } | null>(null);
   const [isGenericConfirmOpen, setIsGenericConfirmOpen] = useState(false);
   const [genericConfirmMessage, setGenericConfirmMessage] = useState<string>('');
   const [onGenericConfirm, setOnGenericConfirm] = useState<(() => void) | null>(null);
-  const [pendingSubmitData, setPendingSubmitData] = useState<Omit<Person, 'id' | 'children'> & { id?: string } | null>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<Omit<Person, 'id' | 'children' | 'padrinhoId'> & { id?: string } | null>(null); // Adjusted type
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedPersonForDetails, setSelectedPersonForDetails] = useState<Person | null>(null);
 
   // --- Memoized Dropdown Options ---
-  const naipeOptions: string[] = useMemo(() => { // Add : string[]
-    const naipes = new Set(treeData.map(p => p.naipeVocal).filter(Boolean) as string[]);
+  const familyNameOptions: string[] = useMemo(() => {
+    // familyName is required, so filter(Boolean) is sufficient or just map directly
+    const names = new Set(treeData.map(p => p.familyName));
+    return Array.from(names).sort();
+  }, [treeData]);
+
+  const naipeOptions: string[] = useMemo(() => {
+    // Use a type predicate to filter out undefined and assure TypeScript
+    const naipes = new Set(
+        treeData
+            .map(p => p.naipeVocal)
+            .filter((n): n is string => typeof n === 'string' && n !== '') // Ensures only non-empty strings remain
+    );
     return Array.from(naipes).sort();
   }, [treeData]);
-  
-  const instrumentOptions: string[] = useMemo(() => { // Add : string[]
+
+  const instrumentOptions: string[] = useMemo(() => {
     const instruments = new Set<string>();
     treeData.forEach(p => {
-        if (p.mainInstrument) instruments.add(p.mainInstrument);
-        p.otherInstruments?.forEach(inst => instruments.add(inst));
+        // Use type guard for mainInstrument
+        if (p.mainInstrument && typeof p.mainInstrument === 'string') {
+             instruments.add(p.mainInstrument);
+        }
+        // Ensure otherInstruments is an array of strings
+        p.otherInstruments?.forEach(inst => {
+            if(typeof inst === 'string' && inst !== '') {
+                instruments.add(inst)
+            }
+        });
     });
     return Array.from(instruments).sort();
   }, [treeData]);
 
-  const hierarchyOptions: string[] = useMemo(() => { // Add : string[]
-    const currentHierarchy = new Set(treeData.map(p => p.hierarquia).filter(Boolean) as string[]);
+  const hierarchyOptions: string[] = useMemo(() => {
+    // Use a type predicate to filter out undefined and assure TypeScript
+    const currentHierarchy = treeData
+        .map(p => p.hierarquia)
+        .filter((h): h is string => typeof h === 'string' && h !== ''); // Ensures only non-empty strings
+
     const options = new Set<string>(AppStrings.HIERARCHIA_BASE_LEVELS.map(l => l.defaultName));
-    currentHierarchy.forEach(h => options.add(h));
+
+    // Now currentHierarchy is guaranteed to be string[]
+    currentHierarchy.forEach(h => options.add(h)); // This is now safe
+
     return Array.from(options).sort((a, b) => {
-        // Try to sort based on base levels order, custom ones at end
         const indexA = AppStrings.HIERARCHIA_BASE_LEVELS.findIndex(l => l.defaultName === a);
         const indexB = AppStrings.HIERARCHIA_BASE_LEVELS.findIndex(l => l.defaultName === b);
         if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-        if (indexA !== -1) return -1; // Base levels first
+        if (indexA !== -1) return -1;
         if (indexB !== -1) return 1;
-        return a.localeCompare(b); // Sort custom alphabetically
+        return a.localeCompare(b);
     });
   }, [treeData]);
 
-    const padrinhoOptions: { id: string, name: string }[] = useMemo(() => { // Add explicit type
-      const potentialPadrinhos = treeData.filter(p => p.id !== personToEdit?.id);
-      return potentialPadrinhos.map(p => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [treeData, personToEdit]);
+    // --- Padrinho Options Removed ---
 
-
-  // --- Data Fetching (Keep as is) ---
+  // --- Data Fetching ---
   const fetchTreeData = useCallback(async () => {
       if (!database) {
         console.error("Database service unavailable during fetch attempt.");
         setWarningMessage(AppStrings.FIREBASE_DB_UNAVAILABLE);
         const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
-        setTreeData(validatedDemoData || []); // Ensure fallback is valid
+        setTreeData(validatedDemoData || []);
         setDbDataStatus('error'); return;
       }
       const treeDataRef: DatabaseReference = ref(database, 'treeData');
-      setDbDataStatus('loading'); setWarningMessage(null); // Show loading in tree area
+      setDbDataStatus('loading'); setWarningMessage(null);
       try {
         console.log("Attempting to fetch data from Firebase DB...");
         const snapshot = await get(treeDataRef);
@@ -128,8 +153,8 @@ function App() {
                 setTreeData(validatedDemoData || []); setDbDataStatus('error');
             }
         } else {
-            console.log("No data found at /treeData in Firebase DB.");
-            setWarningMessage(AppStrings.FIREBASE_DATA_EMPTY_NODE);
+            console.log("No data found at /treeData in Firebase DB. Using demo data.");
+            setWarningMessage("No data in Firebase, showing default tree.");
             const { validData: validatedDemoData } = validateAndNormalizePersonData(demoData);
             setTreeData(validatedDemoData || []); setDbDataStatus('empty');
         }
@@ -142,29 +167,28 @@ function App() {
       }
    }, []);
 
-  // --- Firebase Init (Fetch data on available status) ---
+  // --- Firebase Init ---
   useEffect(() => {
     if (!isFirebaseAvailable) {
       console.error("Firebase Init Error:", firebaseInitializationError?.message || "Config invalid");
       setFirebaseStatus('config_error');
       setWarningMessage(AppStrings.FIREBASE_CONFIG_ERROR);
-      // Already initialized with demo data, just set status
-      setAuthLoading(false); // Stop auth loading
-      setDbDataStatus('error'); // DB cannot be used
+      setAuthLoading(false);
+      setDbDataStatus('error');
+      setTreeData(initialValidatedDemoData || []);
     } else {
       setFirebaseStatus('available');
-      // Trigger data fetch *after* setting status to available
       fetchTreeData();
     }
-  }, [fetchTreeData]); // Depend on fetchTreeData
+  }, [fetchTreeData]);
 
-  // --- Auth State Listener (Keep as is) ---
+  // --- Auth State Listener ---
   useEffect(() => {
     if (firebaseStatus === 'available' && auth) {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             setCurrentUser(user);
             setAuthLoading(false);
-            console.log("Auth State Changed:", user ? `Logged in as ${user.email}` : "Logged out");
+            console.log("Auth State Changed:", user ? `Logged in as ${user.email} (Verified: ${user.emailVerified})` : "Logged out");
             if (user && !user.emailVerified) {
                 setVerificationWarning(AppStrings.VERIFICATION_WARNING);
                 setResendStatusMessage(null);
@@ -175,352 +199,344 @@ function App() {
         });
         return () => unsubscribe();
     } else if (firebaseStatus !== 'checking') {
-        // If Firebase init failed or finished checking, ensure auth loading stops
         setAuthLoading(false);
     }
-  }, [firebaseStatus]); // Runs when firebaseStatus changes
-
+  }, [firebaseStatus]);
 
   // --- Tuno Check Effect ---
   useEffect(() => {
-    if (firebaseStatus === 'available' && currentUser && dbDataStatus === 'loaded') { // Only run when data loaded and logged in
+    if (firebaseStatus === 'available' && currentUser && dbDataStatus === 'loaded') {
+        const tunoDefaultName = AppStrings.HIERARCHIA_BASE_LEVELS.find(l => l.key === 'tuno')?.defaultName;
         const tunosNeedingReview = treeData.filter(p =>
-            p.hierarquia === 'Tuno' // Or compare with HIERARCHIA_BASE_LEVELS[2].defaultName
+            p.hierarquia === tunoDefaultName
             && isDateOlderThanYears(p.passagemTunoDate, 2)
         );
 
         if (tunosNeedingReview.length > 0) {
-             // Use a general warning, specific modal might be too intrusive on every load
-             // Alternatively, store dismissed warnings in localStorage
              const names = tunosNeedingReview.map(p => p.name).join(', ');
-             setWarningMessage(`Review Needed: ${names} ${tunosNeedingReview.length > 1 ? 'have' : 'has'} been 'Tuno' for over 2 years.`);
-             // In a real app, clicking this warning could highlight the nodes or open a specific review list
+             const reviewMsg = `Review Needed: ${names} ${tunosNeedingReview.length > 1 ? 'have' : 'has'} been 'Tuno' for over 2 years.`;
+             setWarningMessage((prev) => prev ? `${prev}\n${reviewMsg}` : reviewMsg);
         }
     }
-}, [treeData, currentUser, firebaseStatus, dbDataStatus]); // Rerun when data/user changes
+}, [treeData, currentUser, firebaseStatus, dbDataStatus]);
 
-    // --- Handler to Resend Verification Email ---
+    // --- Resend Verification ---
     const handleResendVerificationEmail = async () => {
-      if (!currentUser || resendCooldownActive || !auth || !currentUser.emailVerified === false) {
-          // Don't resend if not logged in, on cooldown, auth unavailable, or already verified
-          return;
-      }
-  
+      if (!currentUser || resendCooldownActive || !auth || currentUser.emailVerified) return;
+
       setResendCooldownActive(true);
-      setResendStatusMessage("Sending verification email..."); // Indicate sending
-  
+      setResendStatusMessage(AppStrings.VERIFICATION_SENDING);
+
       try {
         await sendEmailVerification(currentUser);
-        setResendStatusMessage("New verification email sent! Check your inbox/spam.");
-        // Keep main warning visible, just update status temporarily
-         setTimeout(() => {
-             // Clear only the status message after a few seconds
-             setResendStatusMessage(null);
-         }, 6000); // Clear status message after 6s
+        setResendStatusMessage(AppStrings.VERIFICATION_SENT);
+         setTimeout(() => setResendStatusMessage(null), 6000);
       } catch (error: any) {
         console.error("Error resending verification:", error);
-        setResendStatusMessage(`Failed to send email: ${error.message || 'Unknown error'}`);
-         setTimeout(() => {
-             // Clear error message after a few seconds
-             setResendStatusMessage(null);
-         }, 6000);
+        setResendStatusMessage(AppStrings.VERIFICATION_FAILED(error.message || 'Unknown error'));
+         setTimeout(() => setResendStatusMessage(null), 6000);
       } finally {
-        // Set cooldown timer regardless of success/failure
-        setTimeout(() => setResendCooldownActive(false), 10000); // 10 second cooldown
+        setTimeout(() => setResendCooldownActive(false), 10000);
       }
     };
-  
-    // --- Save Data Function (Keep as is) ---
-    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => { /* ... Same save logic ... */
-       if (!database || !currentUser) { console.error("Cannot save data: Database unavailable or user not logged in."); alert("Error: Cannot save data. Please ensure you are logged in and Firebase is connected."); return false; }
-      const { validData, errors } = validateAndNormalizePersonData(dataToSave);
-      if (!validData) { console.error("Cannot save: Data failed validation.", errors); alert(`Cannot save: Invalid data format detected.\n- ${errors.join('\n- ')}`); return false; }
-      console.log("Attempting to save data to Firebase...");
+
+    // --- Save Data Function ---
+    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => {
+       if (!database || !currentUser) { console.error("Cannot save data: Database unavailable or user not logged in."); alert(AppStrings.SAVE_UNAVAILABLE); return false; }
+       if (!currentUser.emailVerified) { alert("Cannot save data: Email not verified. Please verify your email first."); return false; }
+
+       console.log("Validating data before saving...");
+       const { validData, errors } = validateAndNormalizePersonData(dataToSave);
+
+       if (!validData) {
+           console.error("Cannot save: Data failed validation.", errors);
+           alert(AppStrings.SAVE_FAILED_INVALID_DATA(errors));
+           return false;
+       }
+        if (errors.length > 0) {
+             console.warn("Saving data with minor validation warnings:", errors);
+         }
+
+      console.log("Attempting to save validated data to Firebase...");
       try {
         const treeDataRef = ref(database, 'treeData');
         await set(treeDataRef, validData);
         console.log("Data successfully saved to Firebase.");
-        setWarningMessage("Tree data saved successfully.");
+        setWarningMessage(AppStrings.SAVE_SUCCESS);
         setTimeout(() => setWarningMessage(null), 3000);
         return true;
       } catch (error: any) {
         console.error("Error saving data to Firebase:", error);
-         if (error.code === 'PERMISSION_DENIED') { alert("Error saving data: Permission denied. You might need to log in again or check permissions."); }
-         else { alert(`Error saving data: ${error.message}`); }
+         if (error.code === 'PERMISSION_DENIED') { alert(AppStrings.SAVE_FAILED_PERMISSION); }
+         else { alert(AppStrings.SAVE_FAILED_GENERAL(error.message)); }
         return false;
       }
     }, [currentUser]);
-  
-    // --- Import/Export Handlers (Keep as is) ---
-    const handleImportData = async (data: Person[]) => { /* ... Same import logic ... */
-         setTreeData(data); // Update local state
-      if (firebaseStatus === 'available' && currentUser) {
-        await saveTreeDataToFirebase(data);
-      } else if (firebaseStatus === 'available') {
-          setWarningMessage("Data imported locally. Log in to save to the shared tree.");
-           setTimeout(() => { if (warningMessage === "Data imported locally. Log in to save to the shared tree.") { setWarningMessage(null); } }, 5000);
-      }
+
+    // --- Import/Export Handlers ---
+    const handleImportData = async (data: Person[]) => {
+         console.log("Importing validated data locally.");
+         setTreeData(data);
+         if (firebaseStatus === 'available' && currentUser && currentUser.emailVerified) {
+            console.log("User logged in and verified, attempting to save imported data to Firebase...");
+            await saveTreeDataToFirebase(data);
+         } else if (firebaseStatus === 'available' && currentUser && !currentUser.emailVerified) {
+              setWarningMessage("Data imported locally. Verify your email to save changes to the shared tree.");
+              setTimeout(() => { if (warningMessage?.startsWith("Data imported locally.")) { setWarningMessage(null); } }, 5000);
+         } else if (firebaseStatus === 'available') {
+             setWarningMessage(AppStrings.IMPORT_LOCAL_WARNING);
+             setTimeout(() => { if (warningMessage === AppStrings.IMPORT_LOCAL_WARNING) { setWarningMessage(null); } }, 5000);
+         }
     };
     const handleExportData = () => { return treeData; };
-  
-    // --- Login/Logout Handlers (Keep as is) ---
-  
+
+    // --- Login/Logout Handlers ---
     const handleLoginClick = () => {
-      if (firebaseStatus === 'config_error') {
-         alert("Login unavailable: Firebase is not configured correctly.");
-         return;
-      }
+      if (firebaseStatus === 'config_error') { alert(AppStrings.LOGIN_UNAVAILABLE); return; }
      setIsLoginModalOpen(true);
     };
-  
+
     const handleLogoutClick = async () => {
-      // Add a log to check the auth object just before signing out
       console.log("Attempting logout. Auth object:", auth);
-  
-      if (!auth) {
-          console.error("Logout failed: Firebase auth object is null.");
-          alert("Logout failed: Authentication service unavailable.");
-          return; // Explicitly return if auth is null
-      }
+      if (!auth) { console.error("Logout failed: Firebase auth object is null."); alert(AppStrings.AUTH_SERVICE_UNAVAILABLE); return; }
       try {
         await signOut(auth);
-        // User state will update via the onAuthStateChanged listener
         console.log("Sign out successful via Firebase.");
-        // Optionally clear local state that shouldn't persist after logout
-        // setTreeData(demoData); // Decide if you want to reset view on logout
-        // setWarningMessage(null); // Clear any previous warnings
       } catch (error: any) {
         console.error("Logout Error:", error);
-        alert(`Logout failed: ${error.message || 'Unknown error'}`);
+        alert(AppStrings.LOGOUT_FAILED(error.message || 'Unknown error'));
       }
     };
-  
-    const handleCloseLoginModal = () => {
+    const handleCloseLoginModal = () => { setIsLoginModalOpen(false); };
+
+    // --- Sign Up Handlers ---
+    const handleSignUpClick = () => {
+      if (firebaseStatus === 'config_error') { alert(AppStrings.SIGNUP_UNAVAILABLE); return; }
+      setIsSignUpModalOpen(true);
       setIsLoginModalOpen(false);
     };
-  
-    // --- New Sign Up Handlers ---
-    const handleSignUpClick = () => {
-      if (firebaseStatus === 'config_error') {
-          alert("Sign up unavailable: Firebase is not configured correctly.");
-          return;
-      }
-      setIsSignUpModalOpen(true);
-      setIsLoginModalOpen(false); // Close login if open
-    };
-  
     const handleCloseSignUpModal = () => { setIsSignUpModalOpen(false); };
-  
-    // --- Switch between Login/Sign Up Modals ---
-    const handleSwitchToLogin = () => {
-        setIsSignUpModalOpen(false);
-        setIsLoginModalOpen(true);
-    };
-    const handleSwitchToSignUp = () => {
-        setIsLoginModalOpen(false);
-        setIsSignUpModalOpen(true);
-    };
-    // --- End Sign Up Handlers ---
-  
-    // --- NEW: Add/Edit/Delete Person Handlers ---
-  
-    // Opens the form to ADD a new person under the given parent
-    const handleAddPersonClick = (parentId: string) => {
-      if (!currentUser) return; // Only logged-in users
-      setParentForNewPersonId(parentId);
-      setPersonToEdit(null); // Ensure not in edit mode
+
+    // --- Switch between Modals ---
+    const handleSwitchToLogin = () => { setIsSignUpModalOpen(false); setIsLoginModalOpen(true); };
+    const handleSwitchToSignUp = () => { setIsLoginModalOpen(false); setIsSignUpModalOpen(true); };
+
+    // --- Add/Edit/Delete Person Handlers ---
+    const handleAddPersonClick = (padrinhoId: string) => {
+      if (!currentUser) return;
+      if (!currentUser.emailVerified) { alert("Cannot add: Email not verified."); return; }
+      console.log(`Setting parent for new person: ${padrinhoId}`);
+      setParentForNewPersonId(padrinhoId);
+      setPersonToEdit(null);
       setEditMode('add');
       setIsPersonFormOpen(true);
     };
-  
-     // Opens the form to EDIT an existing person
+
     const handleEditPersonClick = (person: Person) => {
-      if (!currentUser) return; // Only logged-in users
+      if (!currentUser) return;
+      if (!currentUser.emailVerified) { alert("Cannot edit: Email not verified."); return; }
       setPersonToEdit(person);
-      setParentForNewPersonId(null); // Ensure not in add mode
+      setParentForNewPersonId(null);
       setEditMode('edit');
       setIsPersonFormOpen(true);
     };
-  
-    // Handles submission from the PersonForm (both add and edit)
+
     const handlePersonFormSubmit = (
-      personFormData: Omit<Person, 'id' | 'parents' | 'children' | 'spouses'> & { id?: string }
+      personFormData: Omit<Person, 'id' | 'children' | 'padrinhoId'> & { id?: string }
     ) => {
-      let updatedTreeData = [...treeData]; // Create a copy
-  
+      let updatedTreeData = [...treeData];
+
       if (editMode === 'edit' && personFormData.id) {
-          // --- EDIT existing person ---
           const personIndex = updatedTreeData.findIndex(p => p.id === personFormData.id);
           if (personIndex !== -1) {
               const originalPerson = updatedTreeData[personIndex];
-              // Merge existing relational data with form data
               updatedTreeData[personIndex] = {
-                  ...originalPerson, // Keep existing parents, children, spouses
-                  ...personFormData, // Overwrite with form data
+                  ...originalPerson,
+                  ...personFormData,
               };
                console.log("Editing person:", updatedTreeData[personIndex]);
           } else {
-               console.error("Person to edit not found!");
-               return; // Should not happen
+               console.error("Person to edit not found!"); return;
           }
-  
+
       } else if (editMode === 'add' && parentForNewPersonId) {
-          // --- ADD new person ---
           const parentIndex = updatedTreeData.findIndex(p => p.id === parentForNewPersonId);
           if (parentIndex === -1) {
-               console.error("Parent for new person not found!");
-               return; // Should not happen
+               console.error(`Parent (Padrinho) with ID ${parentForNewPersonId} for new person not found!`);
+               alert(`Error: Could not find the Padrinho/Madrinha in the current tree data.`);
+               return;
           }
-  
+
           const newPerson: Person = {
-              ...personFormData, // Data from form
-              id: crypto.randomUUID(), // Generate unique ID (ensure browser support or use uuid lib)
-              children: [], // New person starts with no children
+              ...personFormData,
+              id: crypto.randomUUID(),
+              padrinhoId: parentForNewPersonId, // Set the padrinhoId correctly
+              children: [],
           };
-  
-          // Add the new person to the data array
+
           updatedTreeData.push(newPerson);
-          // Add the new person's ID to the parent's children array
           updatedTreeData[parentIndex] = {
               ...updatedTreeData[parentIndex],
               children: [...updatedTreeData[parentIndex].children, newPerson.id]
           };
-           console.log("Adding new person:", newPerson);
+           console.log("Adding new person:", newPerson, "under Padrinho:", parentForNewPersonId);
       } else {
-          console.error("Invalid state for form submission.");
+          console.error("Invalid state for form submission (editMode or parentForNewPersonId missing).");
+          alert("Error: Could not determine whether to add or edit person.");
           return;
       }
-  
-      // Update state and save to Firebase
+
       setTreeData(updatedTreeData);
-      if (firebaseStatus === 'available' && currentUser) {
+
+      if (firebaseStatus === 'available' && currentUser && currentUser.emailVerified) {
           saveTreeDataToFirebase(updatedTreeData);
+      } else {
+           setWarningMessage("Changes saved locally. Log in and verify email to save to the shared tree.");
+           setTimeout(() => { if (warningMessage?.startsWith("Changes saved locally.")) { setWarningMessage(null); } }, 5000);
       }
-      setIsPersonFormOpen(false); // Close form
+
+      setIsPersonFormOpen(false);
       setPersonToEdit(null);
       setParentForNewPersonId(null);
     };
-  
-    // Opens the delete confirmation modal
+
     const handleDeletePersonClick = (personId: string, personName: string) => {
-       if (!currentUser) return; // Only logged-in users
+       if (!currentUser) return;
+       if (!currentUser.emailVerified) { alert("Cannot delete: Email not verified."); return; }
        setPersonToDelete({ id: personId, name: personName });
        setIsDeleteConfirmOpen(true);
     };
-  
-    // Handles the actual deletion after confirmation
+
     const handleConfirmDelete = () => {
       if (!personToDelete) return;
       const { id: personIdToDelete } = personToDelete;
-  
-      // 1. Filter out the person to be deleted
+
+      let parentPerson: Person | null = null;
+      const childPerson = treeData.find(p => p.id === personIdToDelete) ?? null; // Keep 'const' if not reassigned
+
+       // 1. Find the parent (Padrinho) of the person being deleted
+       // Ensure childPerson exists AND has a padrinhoId before trying to find the parent
+      if (childPerson && childPerson.padrinhoId) {
+           parentPerson = treeData.find(p => p.id === childPerson.padrinhoId) ?? null;
+      }
+
+      const childrenOfDeleted = treeData.filter(p => p.padrinhoId === personIdToDelete);
       let updatedTreeData = treeData.filter(person => person.id !== personIdToDelete);
-  
-      // 2. Remove references to the deleted person from others
-      updatedTreeData = updatedTreeData.map(person => ({
-        ...person,
-        children: person.children.filter(id => id !== personIdToDelete),
-      }));
-  
+
+      if (parentPerson) {
+          updatedTreeData = updatedTreeData.map(p =>
+              p.id === parentPerson!.id
+                  ? { ...p, children: p.children.filter(id => id !== personIdToDelete) }
+                  : p
+          );
+      }
+
+      if (childrenOfDeleted.length > 0) {
+          const childrenIdsToDeletePadrinho = new Set(childrenOfDeleted.map(c => c.id));
+          updatedTreeData = updatedTreeData.map(p =>
+              childrenIdsToDeletePadrinho.has(p.id)
+                  ? { ...p, padrinhoId: undefined }
+                  : p
+          );
+          console.log(`Removed padrinhoId from ${childrenOfDeleted.length} afilhados of the deleted person.`);
+      }
+
        console.log("Deleting person:", personIdToDelete);
-  
-      // Update state and save to Firebase
+
       setTreeData(updatedTreeData);
-      if (firebaseStatus === 'available' && currentUser) {
+      if (firebaseStatus === 'available' && currentUser && currentUser.emailVerified) {
         saveTreeDataToFirebase(updatedTreeData);
       }
       setIsDeleteConfirmOpen(false);
       setPersonToDelete(null);
-    };  
+    };
 
     const handleNodeClick = (person: Person) => {
       setSelectedPersonForDetails(person);
       setIsDetailsModalOpen(true);
     };
-  
+
     const handleCloseDetailsModal = () => {
       setIsDetailsModalOpen(false);
-      setSelectedPersonForDetails(null); // Clear selected person
+      setSelectedPersonForDetails(null);
     };
 
   // --- Render Logic ---
 
-  // Only show full page loading while checking Firebase config
   if (firebaseStatus === 'checking') {
-    return (
-      <div className="App">
-        <header className="App-header">
-          <div className="loading">Initializing...</div>
-        </header>
-      </div>
-    );
+    return ( <div className="App"> <header className="App-header"> <div className="loading">Initializing...</div> </header> </div> );
   }
 
-  // Render main app structure once Firebase check is done
+  const showTree = !(dbDataStatus === 'loading' && firebaseStatus === 'available');
+  const userCanModify = !!currentUser && !!currentUser.emailVerified;
+
   return (
     <div className="App">
       <header className="App-header">
-        {/* Account Indicator */}
         {firebaseStatus !== 'config_error' && auth && (<AccountIndicator {...{ currentUser, onLoginClick: handleLoginClick, onLogoutClick: handleLogoutClick, onSignUpClick: handleSignUpClick }}/> )}
         {authLoading && firebaseStatus !== 'config_error' && <div style={{position: 'absolute', top: '15px', right: '20px', zIndex: 110}}>Loading User...</div>}
 
         <h1>Família TAISCTE</h1>
 
-        {/* Warnings */}
-        {verificationWarning && !warningMessage && ( <div className="firebase-warning warning"> <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}> <span>{verificationWarning}</span> {currentUser && !currentUser.emailVerified && ( <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && ( <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
-        {warningMessage && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}><p>{warningMessage}</p></div> )}
+        {verificationWarning && ( <div className="firebase-warning warning"> <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '5px' }}> <span>{verificationWarning}</span> {currentUser && !currentUser.emailVerified && ( <button onClick={handleResendVerificationEmail} disabled={resendCooldownActive} style={styles.resendLinkButton} title={resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT}> {resendCooldownActive ? AppStrings.VERIFICATION_RESEND_WAIT : AppStrings.VERIFICATION_RESEND_PROMPT} </button> )} </p> {resendStatusMessage && ( <p style={{fontSize: '0.8em', marginTop: '5px', color: resendStatusMessage.startsWith('Failed') ? 'red' : 'green' }}> {resendStatusMessage} </p> )} </div> )}
+        {warningMessage && !verificationWarning && ( <div className={`firebase-warning ${dbDataStatus === 'error' || firebaseStatus === 'config_error' ? 'error' : ''}`}><p style={{ whiteSpace: 'pre-line'}}>{warningMessage}</p></div> )} {/* Added pre-line for newlines */}
 
         <ExportImport {...{ onImport: handleImportData, onExport: handleExportData, isUserLoggedIn: !!currentUser, isFirebaseAvailable: firebaseStatus === 'available' }} />
 
         <div className="tree-container">
-          {(dbDataStatus === 'loading' && firebaseStatus === 'available') ? ( <div className="loading">Loading tree data from Firebase...</div> ) : (
-             <GenealogyTree
+          {!showTree ? ( <div className="loading">Loading tree data from Firebase...</div> ) :
+           treeData.length === 0 && dbDataStatus !== 'loading' ? ( <div className="loading">Tree is empty. Add the first member.</div> ) :
+           ( <GenealogyTree
                 data={treeData}
                 allPeople={treeData}
                 onAddPersonClick={handleAddPersonClick}
                 onDeletePersonClick={handleDeletePersonClick}
                 onEditPersonClick={handleEditPersonClick}
-                isUserLoggedIn={!!currentUser && (currentUser?.emailVerified ?? false)}
-                onNodeClick={handleNodeClick} // <-- Pass the node click handler
+                isUserLoggedIn={userCanModify}
+                onNodeClick={handleNodeClick}
              />
-          )}
+           )}
         </div>
       </header>
 
-      {/* Modals */}
       {firebaseStatus !== 'config_error' && (<LoginModal {...{isOpen: isLoginModalOpen, onClose: handleCloseLoginModal, onSwitchToSignUp: handleSwitchToSignUp}} />)}
       {firebaseStatus !== 'config_error' && (<SignUpModal {...{isOpen: isSignUpModalOpen, onClose: handleCloseSignUpModal, onSwitchToLogin: handleSwitchToLogin}} />)}
+
       <PersonForm
           isOpen={isPersonFormOpen}
           onClose={() => setIsPersonFormOpen(false)}
           onSubmit={handlePersonFormSubmit}
           initialData={personToEdit}
           formTitle={editMode === 'edit' ? 'Edit Person' : 'Add New Afilhado'}
-          naipeOptions={naipeOptions} instrumentOptions={instrumentOptions} hierarchyOptions={hierarchyOptions} padrinhoOptions={padrinhoOptions}
+          familyNameOptions={familyNameOptions}
+          naipeOptions={naipeOptions}
+          instrumentOptions={instrumentOptions}
+          hierarchyOptions={hierarchyOptions}
           isEditMode={editMode === 'edit'}
       />
+
       <Modal {...{isOpen: isDeleteConfirmOpen, onClose: () => setIsDeleteConfirmOpen(false), onConfirm: handleConfirmDelete, title: AppStrings.CONFIRM_DELETE_TITLE, confirmText:"Delete", cancelText:"Cancel" }}>
           <p>{AppStrings.CONFIRM_DELETE_MSG(personToDelete?.name || 'this person')}</p>
       </Modal>
+
       <Modal isOpen={isGenericConfirmOpen} onClose={() => { setIsGenericConfirmOpen(false); setPendingSubmitData(null); setOnGenericConfirm(null); }} onConfirm={() => { if (onGenericConfirm) { onGenericConfirm(); } setIsGenericConfirmOpen(false); }} title="Confirm Action" confirmText="Continue" cancelText="Cancel" >
            <p>{genericConfirmMessage}</p>
       </Modal>
 
-      {/* --- Render Details Modal --- */}
       <PersonDetailsModal
         isOpen={isDetailsModalOpen}
         onClose={handleCloseDetailsModal}
         person={selectedPersonForDetails}
-        allPeople={treeData} // Pass all people for lookup
+        allPeople={treeData}
       />
 
     </div>
   );
 }
 
-// Keep styles or move to CSS
 const styles: { [key: string]: React.CSSProperties } = {
     resendLinkButton: { background: 'none', border: 'none', color: '#0056b3', textDecoration: 'underline', cursor: 'pointer', padding: '0 5px', fontSize: 'inherit', marginLeft: '5px', },
 };
 
 export default App;
+// --- END OF RELEVANT App.tsx SECTION ---

@@ -57,6 +57,7 @@ const PersonDetailsModal: React.FC<PersonDetailsModalProps> = ({ isOpen, onClose
             />
            <h2 style={styles.name}>{displayName}</h2>
            <div style={styles.detailsGrid}>
+                {person.familyName && <><span style={styles.label}>Família:</span> <span>{person.familyName}</span></>}
                 {person.hierarquia && <><span style={styles.label}>Hierarquia:</span> <span>{person.hierarquia}</span></>}
                 {person.naipeVocal && <><span style={styles.label}>Naipe Vocal:</span> <span>{person.naipeVocal}</span></>}
                 {person.mainInstrument && <><span style={styles.label}>Instrumento Principal:</span> <span>{person.mainInstrument}</span></>}
