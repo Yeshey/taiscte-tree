@@ -135,17 +135,33 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
   ```
    {
    "rules": {
-      // Allow PUBLIC read access to the 'treeData' path
       "treeData": {
          ".read": true,
-         // Allow write ONLY for authenticated users
-         ".write": "auth != null"
+         ".write": "auth != null && auth.token.email_verified === true"
       },
-      // Keep other paths restricted by default
-      ".read": false, // Changed from true for better security
+      "invites": {
+         "$inviteId": {
+         ".read": true,
+         ".write": "(!data.exists() && newData.exists() && auth != null && auth.token.email_verified === true && newData.child('status').val() === 'unused' && newData.child('creatorUid').val() === auth.uid) || (data.exists() && newData.exists() && data.child('status').val() === 'unused' && newData.child('status').val() === 'used' && newData.child('usedByEmail').exists())",
+         "status": {
+            ".validate": "newData.val() === 'unused' || newData.val() === 'used'"
+         },
+         "creatorUid": {
+            ".validate": "newData.isString()"
+         },
+         "usedByEmail": {
+            ".validate": "!data.exists() || newData.isString()"
+         },
+         "$other": {
+            ".validate": false
+         }
+         }
+      },
+      ".read": false,
       ".write": false
-      }
    }
+   }
+
   ```
 
 ## GitHub Workflows auto update

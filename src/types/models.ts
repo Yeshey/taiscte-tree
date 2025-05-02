@@ -21,6 +21,17 @@ export interface Person {
   hierarquia?: string;
 }
 
+// New interface for Invite Tokens
+export interface InviteToken {
+    id: string; // The token itself (UUID)
+    status: 'unused' | 'used';
+    creatorUid: string; // UID of the user who created the invite
+    usedByEmail?: string; // Email of the user who used the invite
+    // createdAt?: number; // Optional: Timestamp
+    // expiresAt?: number; // Optional: Expiration timestamp
+}
+
+
 // FamilyLink is likely no longer needed for tree structure
 // export interface FamilyLink { ... }
 

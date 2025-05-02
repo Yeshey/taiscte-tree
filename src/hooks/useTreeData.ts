@@ -49,9 +49,9 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
         } catch (error: any) { console.error("Fetch error:", error); if (error.code === 'PERMISSION_DENIED') setDataWarningMessage(AppStrings.FIREBASE_FETCH_PERMISSION_ERROR); else setDataWarningMessage(AppStrings.FIREBASE_FETCH_ERROR(error.message)); setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); }
     }, []);
 
-    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => { /* ... (no changes needed here, relies on validation) ... */
+    const saveTreeDataToFirebase = useCallback(async (dataToSave: Person[]) => {
         if (!database || !currentUser) { alert(AppStrings.SAVE_UNAVAILABLE); return false; }
-        if (!currentUser.emailVerified) { alert("Cannot save data: Email not verified."); return false; }
+        if (!currentUser.emailVerified) { alert(AppStrings.SAVE_FAILED_PERMISSION_VERIFY); return false; } // Specific message
         // *** IMPORTANT: Ensure validation handles parentId and no children ***
         const { validData, errors } = validateAndNormalizePersonData(dataToSave);
         if (!validData) { alert(AppStrings.SAVE_FAILED_INVALID_DATA(errors)); return false; }
@@ -60,53 +60,81 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
             const treeDataRef = ref(database, 'treeData'); await set(treeDataRef, validData);
             setDataWarningMessage(AppStrings.SAVE_SUCCESS); setTimeout(() => setDataWarningMessage(null), 3000); return true;
         } catch (error: any) { console.error("Save error:", error); if (error.code === 'PERMISSION_DENIED') alert(AppStrings.SAVE_FAILED_PERMISSION); else alert(AppStrings.SAVE_FAILED_GENERAL(error.message)); return false; }
-     }, [currentUser]);
+     }, [currentUser]); // Add currentUser dependency
 
     useEffect(() => { /* ... (Initial Fetch effect - no changes needed) ... */
         if (firebaseStatus === 'available') { fetchTreeData(); }
-        else if (firebaseStatus === 'config_error') { setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); }
-        setDataWarningMessage(null);
+        else if (firebaseStatus === 'config_error') { setTreeData(initialValidatedDemoData || []); setDbDataStatus('error'); setDataWarningMessage(AppStrings.FIREBASE_CONFIG_ERROR); } // Show config error message
+        // Clear specific messages on status change, but maybe keep config error?
+        // setDataWarningMessage(null);
     }, [firebaseStatus, fetchTreeData]);
 
-    useEffect(() => { /* ... (Tuno Check effect - no changes needed) ... */
+    // --- FIX Double Warning Bug ---
+    useEffect(() => {
         if (firebaseStatus === 'available' && currentUser && dbDataStatus === 'loaded') {
             const tunoName = AppStrings.HIERARCHIA_BASE_LEVELS.find(l => l.key === 'tuno')?.defaultName;
-            const tunos = treeData.filter(p => p.hierarquia === tunoName && isDateOlderThanYears(p.passagemTunoDate, 2));
-            if (tunos.length > 0) { const names = tunos.map(p => p.name).join(', '); const msg = `Review Needed: ${names}...`; setDataWarningMessage(prev => prev ? `${prev}\n${msg}` : msg); }
-        }
-    }, [treeData, currentUser, firebaseStatus, dbDataStatus]);
+            const tunosNeedingReview = treeData.filter(p => p.hierarquia === tunoName && isDateOlderThanYears(p.passagemTunoDate, 2));
 
-    // --- CRUD Handlers ---
+            if (tunosNeedingReview.length > 0) {
+                const names = tunosNeedingReview.map(p => p.name).join(', ');
+                const msg = `Review Needed: ${names} (Tuno > 2 years).`; // Make message more specific
+
+                setDataWarningMessage(prev => {
+                    // Check if this *specific* message is already present
+                    if (prev && prev.includes(msg)) {
+                        return prev; // Already included, don't add again
+                    }
+                    // Append if not already present
+                    return prev ? `${prev}\n${msg}` : msg;
+                });
+            }
+            // Optional: Remove the warning if no tunos need review anymore?
+            // else {
+            //    setDataWarningMessage(prev => prev?.replace(/Review Needed:.*\(Tuno > 2 years\).\n?/, '') || null);
+            // }
+        }
+    }, [treeData, currentUser, firebaseStatus, dbDataStatus]); // Keep dependencies
+
+    // --- CRUD Handlers (Ensure verification check) ---
     const handleAddPerson = useCallback(async (
         personFormData: Omit<Person, 'id' | 'parentId'>, // Form data doesn't include parentId
         targetParentId: string // The ID of the node clicked
     ) => {
-        // Parent existence check is less critical now as tree builds differently,
-        // but good to ensure the targetParentId is valid if possible.
+        // --- Add Verification Check ---
+        if (!currentUser?.emailVerified) {
+             alert(AppStrings.ACTION_REQUIRES_VERIFICATION("add members"));
+             return false;
+        }
+        // --- End Check ---
+
         const parentExists = treeData.some(p => p.id === targetParentId);
         if (!parentExists && targetParentId !== 'root' && targetParentId !== 'artificial_root') { // Allow adding under artificial roots
              console.warn(`Attempting to add under non-existent parent ID: ${targetParentId}`);
-             // Decide if this should be an error or just proceed adding as an orphan/root
-             // Let's proceed, transformTunaDataForTree will handle it.
         }
 
         const newPerson: Person = {
             ...personFormData,
             id: crypto.randomUUID(),
             parentId: (targetParentId === 'root' || targetParentId === 'artificial_root') ? undefined : targetParentId, // Set parentId or undefined for root adds
-            // No children array to initialize
         };
 
         const updatedTree = [...treeData, newPerson]; // Just add the new person to the flat list
 
         setTreeData(updatedTree); // Update local state
         return await saveTreeDataToFirebase(updatedTree); // Attempt to save
-    }, [treeData, saveTreeDataToFirebase]);
+    }, [treeData, saveTreeDataToFirebase, currentUser]); // Add currentUser
 
     const handleEditPerson = useCallback(async (
         // Form data includes id, excludes parentId (can't change parent via edit form)
         personFormData: Omit<Person, 'parentId'> & { id: string }
     ) => {
+         // --- Add Verification Check ---
+         if (!currentUser?.emailVerified) {
+            alert(AppStrings.ACTION_REQUIRES_VERIFICATION("edit members"));
+            return false;
+        }
+        // --- End Check ---
+
         const personIndex = treeData.findIndex(p => p.id === personFormData.id);
         if (personIndex === -1) {
             console.error("Person to edit not found!");
@@ -123,21 +151,24 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
 
         setTreeData(updatedTree);
         return await saveTreeDataToFirebase(updatedTree);
-    }, [treeData, saveTreeDataToFirebase]);
+    }, [treeData, saveTreeDataToFirebase, currentUser]); // Add currentUser
 
     const handleDeletePerson = useCallback(async (personIdToDelete: string) => {
-        // Find children (people whose parentId points to the one being deleted)
+        // --- Add Verification Check ---
+        if (!currentUser?.emailVerified) {
+            alert(AppStrings.ACTION_REQUIRES_VERIFICATION("delete members"));
+            return false;
+        }
+        // --- End Check ---
+
         const childrenOfDeleted = treeData.filter(p => p.parentId === personIdToDelete);
 
-        // 1. Filter out the person to be deleted
         let updatedTree = treeData.filter(p => p.id !== personIdToDelete);
 
-        // 2. Make the direct children orphans (set their parentId to undefined)
         if (childrenOfDeleted.length > 0) {
             const childIdsToUpdate = new Set(childrenOfDeleted.map(c => c.id));
             updatedTree = updatedTree.map(p =>
                 childIdsToUpdate.has(p.id)
-                    // Create a new object, copying existing props and setting parentId
                     ? { ...p, parentId: undefined }
                     : p
             );
@@ -146,15 +177,15 @@ export function useTreeData(currentUser: User | null, firebaseStatus: FirebaseSt
 
         setTreeData(updatedTree);
         return await saveTreeDataToFirebase(updatedTree);
-    }, [treeData, saveTreeDataToFirebase]);
+    }, [treeData, saveTreeDataToFirebase, currentUser]); // Add currentUser
 
     // --- Import/Export (no changes needed here) ---
-    const handleImportData = useCallback(async (importedData: Person[]) => { /* ... */
+    const handleImportData = useCallback(async (importedData: Person[]) => {
         setTreeData(importedData); setDataWarningMessage("Data imported locally.");
-        if (currentUser?.emailVerified) { const saved = await saveTreeDataToFirebase(importedData); if (saved) { setDataWarningMessage(null); setTimeout(() => setDataWarningMessage(null), 3000); } }
-        else if (currentUser) { setDataWarningMessage("Data imported locally. Verify your email to save."); setTimeout(() => { if (dataWarningMessage?.includes("imported locally")) setDataWarningMessage(null); }, 5000); }
+        if (currentUser?.emailVerified) { const saved = await saveTreeDataToFirebase(importedData); if (saved) { setDataWarningMessage(AppStrings.SAVE_SUCCESS); setTimeout(() => setDataWarningMessage(null), 3000); } } // Clear message on save success
+        else if (currentUser) { setDataWarningMessage(AppStrings.IMPORT_LOCAL_VERIFY_WARNING); setTimeout(() => { if (dataWarningMessage === AppStrings.IMPORT_LOCAL_VERIFY_WARNING) setDataWarningMessage(null); }, 5000); }
         else { setDataWarningMessage(AppStrings.IMPORT_LOCAL_WARNING); setTimeout(() => { if (dataWarningMessage === AppStrings.IMPORT_LOCAL_WARNING) setDataWarningMessage(null); }, 5000); }
-    }, [currentUser, saveTreeDataToFirebase, dataWarningMessage]);
+    }, [currentUser, saveTreeDataToFirebase, dataWarningMessage]); // Keep dataWarningMessage dependency
 
     const handleExportData = useCallback(() => treeData, [treeData]);
 

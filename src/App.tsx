@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState, useCallback, useMemo } from 'react'; // Removed useEffect as it's in hooks now
+import React, { useState, useCallback, useMemo, useEffect } from 'react'; // Added useEffect
 import './App.css';
 import AppLayout from './components/AppLayout';
 import { Person } from './types/models';
@@ -14,22 +14,32 @@ type FirebaseStatus = 'checking' | 'config_error' | 'unavailable' | 'available';
 function App() {
     // --- Determine Initial Firebase Status ---
     const initialFirebaseStatus: FirebaseStatus = useMemo(() => {
+        // This check runs before any async operations like auth listener setup
         if (!isFirebaseAvailable && firebaseInitializationError) return 'config_error';
         if (isFirebaseAvailable) return 'available';
-        return 'unavailable';
-    }, []); // No dependencies needed
+        // If neither of the above, it implies config was likely okay but maybe app failed init?
+        // Or simply that isFirebaseAvailable is false without an error.
+        return 'unavailable'; // Treat as unavailable if not config_error or available
+    }, []);
 
     // --- Hooks ---
     const {
         currentUser, authLoading, isLoginModalOpen, isSignUpModalOpen, verificationWarning,
         resendCooldownActive, resendStatusMessage, handleLoginClick, handleLogoutClick,
         handleSignUpClick, handleCloseLoginModal, handleCloseSignUpModal, handleSwitchToLogin,
-        handleSwitchToSignUp, handleResendVerificationEmail
-    } = useAuth(initialFirebaseStatus);
+        handleSwitchToSignUp, handleResendVerificationEmail,
+        // Invite related
+        inviteTokenId, inviteStatus, inviteError, inviteCheckComplete,
+        generateInvite, markInviteAsUsed,
+        // Password Reset related
+        passwordResetEmail, setPasswordResetEmail, passwordResetLoading,
+        passwordResetMessage, passwordResetError, handlePasswordReset
+    } = useAuth(initialFirebaseStatus); // Pass the synchronously determined status
 
     const {
         treeData, dbDataStatus, dataWarningMessage, handleImportData, handleExportData,
         handleAddPerson, handleEditPerson, handleDeletePerson
+        // Pass currentUser to useTreeData if needed for rules/checks within it
     } = useTreeData(currentUser, initialFirebaseStatus);
 
     const {
@@ -39,8 +49,7 @@ function App() {
     // --- App-level State (mostly for modals/UI interactions) ---
     const [isPersonFormOpen, setIsPersonFormOpen] = useState(false);
     const [personToEdit, setPersonToEdit] = useState<Person | null>(null);
-    // Renamed state variable for clarity
-    const [targetParentId, setTargetParentId] = useState<string | null>(null); // ID of node where "+" was clicked
+    const [targetParentId, setTargetParentId] = useState<string | null>(null);
     const [editMode, setEditMode] = useState<EditMode>('add');
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [personToDelete, setPersonToDelete] = useState<{ id: string, name: string } | null>(null);
@@ -50,42 +59,53 @@ function App() {
     const [genericConfirmMessage, setGenericConfirmMessage] = useState<string>('');
     const [onGenericConfirm, setOnGenericConfirm] = useState<(() => void) | null>(null);
 
+    // --- Automatically open signup if valid invite detected on load ---
+     useEffect(() => {
+         // Make sure invite check is complete before deciding
+         if (inviteCheckComplete && inviteStatus === 'valid' && !authLoading && !currentUser && !isLoginModalOpen && !isSignUpModalOpen) {
+             console.log("Valid invite detected & user not logged in, opening sign up modal.");
+             handleCloseLoginModal(); // Ensure login is closed
+             handleSignUpClick(); // Trigger sign up modal opening
+         }
+     }, [inviteStatus, authLoading, currentUser, isLoginModalOpen, isSignUpModalOpen, handleSignUpClick, handleCloseLoginModal, inviteCheckComplete]);
+
+
     // --- Combine Warning Messages ---
+    // Combine DB/Verification warnings, Invite errors are handled separately for clarity
     const displayWarning = verificationWarning || dataWarningMessage;
 
     // --- UI Action Handlers that trigger logic or set modal state ---
-    const handleAddPersonClick = useCallback((clickedNodeId: string) => { // Parameter is the ID of the node clicked
-        if (!currentUser || !currentUser.emailVerified) { alert("Login and verify email to add members."); return; }
-        console.log(`UI: Add clicked under node ID: ${clickedNodeId}`); // Debug log
-        setTargetParentId(clickedNodeId); // Store the ID of the clicked node (potential parent)
+    const handleAddPersonClick = useCallback((clickedNodeId: string) => {
+        // Check verification status inside useTreeData's handleAddPerson now
+        console.log(`UI: Add clicked under node ID: ${clickedNodeId}`);
+        setTargetParentId(clickedNodeId);
         setPersonToEdit(null);
         setEditMode('add');
         setIsPersonFormOpen(true);
-    }, [currentUser]);
+    }, []); // Removed currentUser dependency
 
     const handleEditPersonClick = useCallback((person: Person) => {
-        if (!currentUser || !currentUser.emailVerified) { alert("Login and verify email to edit members."); return; }
+        // Check verification status inside useTreeData's handleEditPerson now
         setPersonToEdit(person);
-        setTargetParentId(null); // Not adding, so no target parent needed
+        setTargetParentId(null);
         setEditMode('edit');
         setIsPersonFormOpen(true);
-    }, [currentUser]);
+    }, []); // Removed currentUser dependency
 
     const handleDeletePersonClick = useCallback((personId: string, personName: string) => {
-        if (!currentUser || !currentUser.emailVerified) { alert("Login and verify email to delete members."); return; }
+         // Check verification status inside useTreeData's handleDeletePerson now
         setPersonToDelete({ id: personId, name: personName });
         setIsDeleteConfirmOpen(true);
-    }, [currentUser]);
+    }, []); // Removed currentUser dependency
 
     const handlePersonFormSubmit = useCallback(async (
-        // Form data excludes id, parentId, children
         personFormData: Omit<Person, 'id' | 'parentId' | 'children'> & { id?: string }
     ) => {
         let success = false;
-        if (editMode === 'edit' && personToEdit?.id) { // Use personToEdit for ID in edit mode
-            // Ensure id is passed correctly for editing
+        // Verification is checked within handleAddPerson/handleEditPerson now
+        if (editMode === 'edit' && personToEdit?.id) {
             success = await handleEditPerson({ ...personFormData, id: personToEdit.id });
-        } else if (editMode === 'add' && targetParentId) { // Use targetParentId for adding
+        } else if (editMode === 'add' && targetParentId) {
             success = await handleAddPerson(personFormData, targetParentId);
         } else {
             console.error("Invalid state for form submission: editMode or targetParentId missing.");
@@ -95,18 +115,19 @@ function App() {
         if (success) {
             setIsPersonFormOpen(false);
             setPersonToEdit(null);
-            setTargetParentId(null); // Clear target parent after successful add/edit
+            setTargetParentId(null);
         }
-        // Decide if form should stay open on failure based on feedback from hooks
-    }, [editMode, targetParentId, personToEdit, handleAddPerson, handleEditPerson]); // Added personToEdit dependency
+        // Form closes on success, stays open on failure (alert shown by hook)
+    }, [editMode, targetParentId, personToEdit, handleAddPerson, handleEditPerson]);
 
     const handleConfirmDelete = useCallback(async () => {
         if (!personToDelete) return;
+        // Verification is checked within handleDeletePerson now
         const success = await handleDeletePerson(personToDelete.id);
         if (success) {
             setIsDeleteConfirmOpen(false);
             setPersonToDelete(null);
-        }
+        } // Stays open on failure (alert shown by hook)
     }, [personToDelete, handleDeletePerson]);
 
     const handleNodeClick = useCallback((person: Person) => {
@@ -120,13 +141,19 @@ function App() {
     }, []);
 
     // --- Render Logic ---
-    // No 'checking' state needed here anymore
+    // Corrected Loading Check: Show loading if Firebase is available but auth or invite checks are ongoing.
+    // The AppLayout component will handle showing errors if initialFirebaseStatus is 'config_error' or 'unavailable'.
+    if (initialFirebaseStatus === 'available' && (authLoading || !inviteCheckComplete)) {
+        return <div className="loading">Initializing Auth & Invite...</div>;
+    }
 
+    // If not loading and Firebase is available, or if Firebase has issues, render AppLayout.
+    // AppLayout internally displays warnings based on firebaseStatus and other props.
     return (
         <AppLayout
-            // Pass all necessary props...
+            // --- Auth Props ---
             currentUser={currentUser}
-            authLoading={authLoading}
+            authLoading={authLoading} // Pass down loading state
             isLoginModalOpen={isLoginModalOpen}
             isSignUpModalOpen={isSignUpModalOpen}
             verificationWarning={verificationWarning}
@@ -134,26 +161,43 @@ function App() {
             resendStatusMessage={resendStatusMessage}
             handleLoginClick={handleLoginClick}
             handleLogoutClick={handleLogoutClick}
-            handleSignUpClick={handleSignUpClick}
+            handleSignUpClick={handleSignUpClick} // Pass down for explicit button/link if needed elsewhere
             handleCloseLoginModal={handleCloseLoginModal}
             handleCloseSignUpModal={handleCloseSignUpModal}
             handleSwitchToLogin={handleSwitchToLogin}
             handleSwitchToSignUp={handleSwitchToSignUp}
             handleResendVerificationEmail={handleResendVerificationEmail}
+             // --- Invite Props ---
+             inviteTokenId={inviteTokenId}
+             inviteStatus={inviteStatus}
+             inviteError={inviteError}
+             inviteCheckComplete={inviteCheckComplete} // Pass down check status
+             generateInvite={generateInvite}
+             markInviteAsUsed={markInviteAsUsed}
+             // --- Password Reset Props ---
+             passwordResetEmail={passwordResetEmail}
+             setPasswordResetEmail={setPasswordResetEmail}
+             passwordResetLoading={passwordResetLoading}
+             passwordResetMessage={passwordResetMessage}
+             passwordResetError={passwordResetError}
+             handlePasswordReset={handlePasswordReset}
+            // --- Tree Data Props ---
             treeData={treeData}
             dbDataStatus={dbDataStatus}
-            warningMessage={displayWarning}
+            warningMessage={displayWarning} // Pass combined DB/Verification warnings
             handleImportData={handleImportData}
             handleExportData={handleExportData}
-            handleAddPersonClick={handleAddPersonClick} // Passes the ID of the clicked node
+            handleAddPersonClick={handleAddPersonClick}
             handleDeletePersonClick={handleDeletePersonClick}
             handleEditPersonClick={handleEditPersonClick}
             handleNodeClick={handleNodeClick}
+            // --- Dropdown Options ---
             familyNameOptions={familyNameOptions}
             naipeOptions={naipeOptions}
             instrumentOptions={instrumentOptions}
             hierarchyOptions={hierarchyOptions}
-            firebaseStatus={initialFirebaseStatus}
+            // --- UI / Modal State ---
+            firebaseStatus={initialFirebaseStatus} // Pass the initial status
             isPersonFormOpen={isPersonFormOpen}
             personToEdit={personToEdit}
             editMode={editMode}
@@ -170,8 +214,7 @@ function App() {
             setIsGenericConfirmOpen={setIsGenericConfirmOpen}
             handleCloseDetailsModal={handleCloseDetailsModal}
             onGenericConfirm={onGenericConfirm}
-            // Pass dummy setters if generic confirm modal doesn't need them
-            setPendingSubmitData={() => {}}
+            setPendingSubmitData={() => {}} // Dummy setter, not used
             setOnGenericConfirm={setOnGenericConfirm}
         />
     );
